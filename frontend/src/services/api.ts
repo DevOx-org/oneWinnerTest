@@ -1,9 +1,12 @@
 import axios, { AxiosError } from 'axios';
 
-// Create axios instance with base configuration
+// In production, VITE_API_URL must be set to the full backend URL
+// e.g. https://onewinner-backend.onrender.com/api
+// Locally it falls back to /api (proxied by Vite to localhost:5001)
 const api = axios.create({
     baseURL: import.meta.env.VITE_API_URL || '/api',
-    timeout: 10000,
+    // 60s timeout — Render free tier can take up to 50s to cold-start
+    timeout: 60000,
     headers: {
         'Content-Type': 'application/json',
     },
