@@ -530,13 +530,8 @@ const DashboardPage: React.FC = () => {
 
     // Handle logout
     const handleLogout = () => {
-        if (window.confirm('Are you sure you want to logout?')) {
-            logout();
-            showToast('Logged out successfully', 'success');
-            setTimeout(() => {
-                navigate('/login');
-            }, 1000);
-        }
+        logout();
+        navigate('/login', { replace: true });
     };
 
     // ── Helpers for My Tournaments ──────────────────────────────────────────────

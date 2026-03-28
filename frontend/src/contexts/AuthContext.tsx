@@ -93,6 +93,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Clear localStorage
         authService.logout();
 
+        // Prevent Google One Tap from auto-re-authenticating
+        try {
+            const w = window as any;
+            if (w.google?.accounts?.id) {
+                w.google.accounts.id.disableAutoSelect();
+            }
+        } catch (_) { /* GSI may not be loaded */ }
+
         // Clear state
         setToken(null);
         setUser(null);
