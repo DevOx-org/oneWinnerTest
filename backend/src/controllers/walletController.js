@@ -62,8 +62,9 @@ const createTopUpOrder = asyncHandler(async (req, res) => {
             },
         });
     } catch (err) {
-        logger.error('Razorpay order creation failed', { error: err.message, userId: req.user.id });
-        throw new ApiError(`Failed to create payment order: ${err.description || err.message}`, 500);
+        const razorpayMsg = err?.error?.description || err?.description || err?.message || JSON.stringify(err);
+        logger.error('Razorpay order creation failed', { error: razorpayMsg, fullError: JSON.stringify(err), userId: req.user.id });
+        throw new ApiError(`Failed to create payment order: ${razorpayMsg}`, 500);
     }
 
     // Persist the pending payment record
