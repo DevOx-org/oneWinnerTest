@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import SEOHead from '../components/seo/SEOHead';
 
 const SignupPage: React.FC = () => {
     const navigate = useNavigate();
@@ -186,6 +187,11 @@ const SignupPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-dark-900 flex flex-col">
+            <SEOHead
+                title="Create Account — Join India's Top Esports Platform"
+                description="Sign up for BattleXGround. Create your free account and start competing in daily PUBG, Free Fire, Valorant & COD tournaments. Win real cash prizes!"
+                path="/signup"
+            />
             <Header />
 
             <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">

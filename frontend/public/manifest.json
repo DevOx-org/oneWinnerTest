@@ -1,0 +1,23 @@
+{
+  "name": "BattleXGround",
+  "short_name": "BXG",
+  "description": "India's premier competitive gaming & esports tournament platform. Compete in PUBG, Free Fire, Valorant & COD and win real cash prizes.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#ff6b35",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logoX1.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/images/battlexground-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

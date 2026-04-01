@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import SEOHead from '../components/seo/SEOHead';
 
 import { getMyTournaments, type PublicTournament } from '../services/tournamentService';
 import { useAuth } from '../contexts/AuthContext';
@@ -571,6 +572,12 @@ const DashboardPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-dark-900">
+            <SEOHead
+                title="My Dashboard"
+                description="Your BattleXGround player dashboard. View your wallet, tournament history, match results, and manage your profile."
+                path="/dashboard"
+                noIndex={true}
+            />
             <Header />
 
             {/* Page Header */}

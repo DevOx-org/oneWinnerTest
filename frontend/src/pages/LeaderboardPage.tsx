@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import SEOHead from '../components/seo/SEOHead';
 import {
     getGlobalLeaderboard,
     getGameLeaderboard,
@@ -107,6 +108,11 @@ const LeaderboardPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-dark-900 overflow-x-hidden">
+            <SEOHead
+                title="Leaderboard — Top Esports Players"
+                description="See who's dominating BattleXGround. View top-ranked players by earnings across PUBG, Free Fire, COD & Valorant tournaments. Weekly, monthly & all-time rankings."
+                path="/leaderboard"
+            />
             <Header />
 
             {/* Page Header */}

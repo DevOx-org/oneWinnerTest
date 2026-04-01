@@ -1,5 +1,6 @@
 import React from 'react';
 import PolicyPageLayout from '../components/layout/PolicyPageLayout';
+import SEOHead from '../components/seo/SEOHead';
 
 const Section: React.FC<{ num: string | number; title: string; children: React.ReactNode }> = ({
   num,
@@ -27,6 +28,11 @@ const RefundPolicyPage: React.FC = () => (
     subtitle="Clear, transparent refund and cancellation terms for UPI-based deposits."
     lastUpdated="March 23, 2026"
   >
+    <SEOHead
+      title="Refund Policy"
+      description="BattleXGround's Refund & Cancellation Policy. Understand our UPI deposit refund process, tournament entry fee rules, and how to request refunds."
+      path="/refund"
+    />
     {/* Intro */}
     <div
       className="rounded-xl p-5 mb-10 text-sm text-gray-400 leading-relaxed"

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PolicyPageLayout from '../components/layout/PolicyPageLayout';
+import SEOHead from '../components/seo/SEOHead';
 
 interface FormState {
   name: string;
@@ -71,6 +72,22 @@ const ContactPage: React.FC = () => {
       title="Contact Us"
       subtitle="Have a question or issue? We're here to help 24/7."
     >
+      <SEOHead
+        title="Contact Us"
+        description="Get in touch with BattleXGround support. Reach out for tournament issues, payment & wallet help, account support, refund requests, or partnership inquiries."
+        path="/contact"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'ContactPage',
+          name: 'Contact BattleXGround',
+          url: 'https://battlexground.com/contact',
+          mainEntity: {
+            '@type': 'Organization',
+            name: 'BattleXGround',
+            email: 'battlexgroundofficial@gmail.com',
+          },
+        }}
+      />
       {/* Support Channels */}
       <section className="mb-12">
         <h2 className="text-white font-bold text-xl mb-6" style={{ color: '#fff' }}>

@@ -4,6 +4,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import SEOHead from '../components/seo/SEOHead';
 
 const LoginPage: React.FC = () => {
     const navigate = useNavigate();
@@ -115,6 +116,11 @@ const LoginPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-dark-900 flex flex-col">
+            <SEOHead
+                title="Login"
+                description="Log in to your BattleXGround account. Access tournaments, your wallet, match history, and compete in daily esports events."
+                path="/login"
+            />
             <Header />
 
             <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">

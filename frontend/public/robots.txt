@@ -1,0 +1,12 @@
+# https://www.robotstxt.org/robotstxt.html
+
+User-agent: *
+Allow: /
+
+# Protected/private pages — no indexing
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /complete-profile
+
+# Sitemap
+Sitemap: https://battlexground.com/sitemap.xml

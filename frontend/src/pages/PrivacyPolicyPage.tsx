@@ -1,5 +1,6 @@
 import React from 'react';
 import PolicyPageLayout from '../components/layout/PolicyPageLayout';
+import SEOHead from '../components/seo/SEOHead';
 
 const Section: React.FC<{ num: string | number; title: string; children: React.ReactNode }> = ({
   num,
@@ -27,6 +28,11 @@ const PrivacyPolicyPage: React.FC = () => (
     subtitle="We respect your privacy and are committed to protecting your personal data."
     lastUpdated="March 23, 2026"
   >
+    <SEOHead
+      title="Privacy Policy"
+      description="BattleXGround's Privacy Policy. Learn how we collect, use and protect your personal data in compliance with India's DPDPA 2023 and IT Act 2000."
+      path="/privacy"
+    />
     {/* Intro */}
     <div
       className="rounded-xl p-5 mb-10 text-sm text-gray-400 leading-relaxed"

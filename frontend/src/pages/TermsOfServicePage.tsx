@@ -1,5 +1,6 @@
 import React from 'react';
 import PolicyPageLayout from '../components/layout/PolicyPageLayout';
+import SEOHead from '../components/seo/SEOHead';
 
 interface Section {
   title: string;
@@ -35,6 +36,11 @@ const TermsOfServicePage: React.FC = () => (
     subtitle="Please read these terms carefully before using BattleXGround."
     lastUpdated="March 23, 2026"
   >
+    <SEOHead
+      title="Terms of Service"
+      description="Read BattleXGround's Terms of Service. Understand our rules, eligibility requirements, tournament participation guidelines, and user responsibilities."
+      path="/terms"
+    />
     {/* Intro */}
     <div
       className="rounded-xl p-5 mb-10 text-sm text-gray-400 leading-relaxed"

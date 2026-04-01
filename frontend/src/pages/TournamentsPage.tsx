@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
+import SEOHead from '../components/seo/SEOHead';
 import TournamentCard from '../components/tournaments/TournamentCard';
 import { getPublicTournaments } from '../services/tournamentService';
 import type { PublicTournament } from '../services/tournamentService';
@@ -109,6 +110,11 @@ const TournamentsPage: React.FC = () => {
 
     return (
         <div className="min-h-screen bg-dark-900 overflow-x-hidden">
+            <SEOHead
+                title="Live Tournaments — PUBG, Free Fire, Valorant & COD"
+                description="Browse and join live esports tournaments on BattleXGround. Compete in daily PUBG, Free Fire, Valorant & COD matches with real cash prize pools. Register now!"
+                path="/tournaments"
+            />
             <Header />
 
             {/* Page Header — matches Dashboard header style */}
