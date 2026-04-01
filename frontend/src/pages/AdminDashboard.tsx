@@ -7,10 +7,11 @@ import AnalyticsOverview from '../components/admin/AnalyticsOverview';
 import UserManagement from '../components/admin/UserManagement';
 import TournamentManagement from '../components/admin/TournamentManagement';
 import WithdrawalsManagement from '../components/admin/WithdrawalsManagement';
+import ManualPaymentsManagement from '../components/admin/ManualPaymentsManagement';
 import SettlementPanel from '../components/admin/SettlementPanel';
 import api from '../services/api';
 
-type TabType = 'Analytics' | 'Users' | 'Tournaments' | 'Withdrawals' | 'Settlements';
+type TabType = 'Analytics' | 'Users' | 'Tournaments' | 'Withdrawals' | 'Manual Payments' | 'Settlements';
 
 interface SettlementAlert {
     tournamentId: string;
@@ -34,6 +35,7 @@ const AdminDashboard: React.FC = () => {
     const [alertCount, setAlertCount] = useState(0);
     const [alertList, setAlertList] = useState<SettlementAlert[]>([]);
     const [alertDismissed, setAlertDismissed] = useState(false);
+    const [manualPaymentCount, setManualPaymentCount] = useState(0);
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
     // Redirect if not admin
@@ -52,6 +54,13 @@ const AdminDashboard: React.FC = () => {
             setAlertDismissed(prev => (count > 0 ? false : prev));
         } catch {
             // Silently ignore — non-critical background poll
+        }
+        // Also fetch manual payment pending count
+        try {
+            const mpRes = await api.get('/admin/manual-payments/pending-count');
+            setManualPaymentCount(mpRes.data.pendingCount ?? 0);
+        } catch {
+            // Silently ignore
         }
     }, []);
 
@@ -73,6 +82,7 @@ const AdminDashboard: React.FC = () => {
         { key: 'Users', label: 'Users', accent: '#6366F1' },
         { key: 'Tournaments', label: 'Tournaments', accent: '#F59E0B' },
         { key: 'Withdrawals', label: 'Withdrawals', accent: '#EF4444' },
+        { key: 'Manual Payments', label: 'Manual Payments', accent: '#22C55E' },
         { key: 'Settlements', label: 'Settlements', accent: '#10B981' },
     ];
 
@@ -179,6 +189,11 @@ const AdminDashboard: React.FC = () => {
                                         {key === 'Settlements' && alertCount > 0 && (
                                             <span className="relative z-10 bg-orange-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
                                                 {alertCount > 9 ? '9+' : alertCount}
+                                            </span>
+                                        )}
+                                        {key === 'Manual Payments' && manualPaymentCount > 0 && (
+                                            <span className="relative z-10 bg-green-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                                {manualPaymentCount > 9 ? '9+' : manualPaymentCount}
                                             </span>
                                         )}
                                         <span
@@ -299,6 +314,7 @@ const AdminDashboard: React.FC = () => {
                     {activeTab === 'Users' && <UserManagement />}
                     {activeTab === 'Tournaments' && <TournamentManagement />}
                     {activeTab === 'Withdrawals' && <WithdrawalsManagement />}
+                    {activeTab === 'Manual Payments' && <ManualPaymentsManagement />}
                     {activeTab === 'Settlements' && <SettlementPanel />}
                 </div>
             </div>

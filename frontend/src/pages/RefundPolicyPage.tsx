@@ -24,7 +24,7 @@ const Section: React.FC<{ num: string | number; title: string; children: React.R
 const RefundPolicyPage: React.FC = () => (
   <PolicyPageLayout
     title="Refund Policy"
-    subtitle="Clear, transparent refund and cancellation terms compliant with Razorpay guidelines."
+    subtitle="Clear, transparent refund and cancellation terms for UPI-based deposits."
     lastUpdated="March 23, 2026"
   >
     {/* Intro */}
@@ -34,8 +34,8 @@ const RefundPolicyPage: React.FC = () => (
     >
       This Refund and Cancellation Policy governs all financial transactions on the BattleXGround
       ("BXG") platform, including wallet deposits, tournament entry fees, and prize withdrawals.
-      All transactions on BXG are processed via <strong className="text-white">Razorpay</strong>{' '}
-      and are subject to Razorpay's terms in addition to this policy.
+      All deposit transactions on BXG are processed via <strong className="text-white">UPI QR manual payment</strong>{' '}
+      and are subject to admin verification before wallet credit.
     </div>
 
     {/* Summary Table */}
@@ -87,8 +87,8 @@ const RefundPolicyPage: React.FC = () => (
       </p>
       <p>
         <strong className="text-white">Exception — Failed Transactions:</strong> If a payment is
-        deducted from your bank account or card but not credited to your BXG wallet within 24
-        hours, the transaction will be automatically reversed by Razorpay within{' '}
+        deducted from your bank account but not credited to your BXG wallet within 24
+        hours, please contact us with your UPI Reference ID within{' '}
         <strong className="text-white">5–7 business days</strong>. Contact your bank or{' '}
         <a href="mailto:battlexgroundofficial@gmail.com" style={{ color: '#FF8C00' }}>
           battlexgroundofficial@gmail.com
@@ -181,19 +181,18 @@ const RefundPolicyPage: React.FC = () => (
       </p>
     </Section>
 
-    <Section num={6} title="Razorpay Refund Process">
+    <Section num={6} title="UPI Payment Refund Process">
       <p>
-        All approved refunds to the original payment method (bank account, UPI, card) are processed
-        through Razorpay and subject to their refund timelines:
+        All approved refunds are processed as wallet credit (Deposit Balance). For failed UPI
+        transactions where money was deducted but not credited:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li><strong className="text-white">UPI:</strong> Instant to 2 business days.</li>
-        <li><strong className="text-white">Debit/Credit Card:</strong> 5–7 business days.</li>
-        <li><strong className="text-white">Net Banking:</strong> 3–5 business days.</li>
+        <li><strong className="text-white">UPI:</strong> Contact your UPI app provider for reversal — typically instant to 2 business days.</li>
+        <li><strong className="text-white">Manual deposit mismatch:</strong> If your deposit was approved for the wrong amount, contact us for correction within 72 hours.</li>
       </ul>
       <p>
-        BXG is not responsible for delays caused by the banking system or Razorpay's processing
-        timelines. Once we initiate a refund, confirmation will be sent to your registered email.
+        BXG is not responsible for delays caused by the banking system or UPI provider processing
+        timelines. Once we process a refund as wallet credit, confirmation will be visible in your Wallet tab.
       </p>
     </Section>
 

@@ -102,14 +102,14 @@ const TermsOfServicePage: React.FC = () => (
         BattleXGround maintains a digital wallet for each user, consisting of:
       </p>
       <ul className="list-disc pl-5 space-y-1">
-        <li><strong className="text-white">Deposit Balance:</strong> Funds added via payment gateway (Razorpay). Used to enter paid tournaments.</li>
+        <li><strong className="text-white">Deposit Balance:</strong> Funds added via UPI QR payment. Used to enter paid tournaments.</li>
         <li><strong className="text-white">Winning Balance:</strong> Prize credits earned through tournament victories. This balance is withdrawable to your registered UPI ID.</li>
       </ul>
       <p>
         Minimum withdrawal amount is <strong className="text-white">₹50</strong>. Withdrawals are
         processed within 3–7 business days after identity verification. BXG reserves the right to
         withhold withdrawals pending fraud or compliance checks. All financial transactions are
-        processed securely via Razorpay.
+        processed securely via UPI.
       </p>
     </Section>
 

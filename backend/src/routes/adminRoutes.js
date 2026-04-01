@@ -25,6 +25,12 @@ const {
     approveWithdrawal,
     rejectWithdrawal,
 } = require('../controllers/adminController');
+const {
+    getManualPayments,
+    approveManualPayment,
+    rejectManualPayment,
+    getPendingCount: getManualPaymentPendingCount,
+} = require('../controllers/manualPaymentController');
 const { protect } = require('../middleware/auth');
 const { authorize } = require('../middleware/authorize');
 
@@ -71,5 +77,11 @@ router.post('/tournaments/:id/distribute-winnings', distributeWinnings);
 router.get('/withdrawals', getWithdrawalRequests);
 router.patch('/withdrawals/:id/approve', approveWithdrawal);
 router.patch('/withdrawals/:id/reject', rejectWithdrawal);
+
+// ── Manual Payment management ─────────────────────────────────────────────────
+router.get('/manual-payments', getManualPayments);
+router.get('/manual-payments/pending-count', getManualPaymentPendingCount);
+router.patch('/manual-payments/:id/approve', approveManualPayment);
+router.patch('/manual-payments/:id/reject', rejectManualPayment);
 
 module.exports = router;

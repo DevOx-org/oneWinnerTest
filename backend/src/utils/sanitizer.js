@@ -25,6 +25,8 @@ const PARTIAL_REDACT_FIELDS = [
     'mobile',
     'cardNumber',
     'card_number',
+    'upiId',
+    'upiReferenceId',
 ];
 
 /**

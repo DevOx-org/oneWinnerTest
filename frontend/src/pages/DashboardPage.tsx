@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
@@ -7,10 +7,11 @@ import { getMyTournaments, type PublicTournament } from '../services/tournamentS
 import { useAuth } from '../contexts/AuthContext';
 import { updateProfile, getProfile, getMatchHistory, type MatchHistoryItem } from '../services/userService';
 import {
-    createTopUpOrder, verifyTopUp, getWalletBalance,
-    requestWithdrawal, getMyWithdrawals
+    getWalletBalance,
+    requestWithdrawal, getMyWithdrawals,
+    submitManualDeposit, getManualDeposits, getUpiInfo
 } from '../services/walletService';
-import type { WalletTransaction, WithdrawalRequest } from '../services/walletService';
+import type { WalletTransaction, WithdrawalRequest, ManualDepositRequest } from '../services/walletService';
 
 type TabType = 'Overview' | 'My Tournaments' | 'Match History' | 'Wallet' | 'Profile';
 type TimePeriod = '7D' | '30D' | '90D';
@@ -49,7 +50,18 @@ const DashboardPage: React.FC = () => {
     const [walletError, setWalletError] = useState<string | null>(null);
     const [topUpAmount, setTopUpAmount] = useState<string>('');
     const [addMoneyLoading, setAddMoneyLoading] = useState(false);
-    const razorpayLoaded = useRef(false);
+
+    // ── Manual Deposit state ──────────────────────────────────────────────────
+    type DepositStep = 'amount' | 'qr' | 'form' | 'submitted';
+    const [depositStep, setDepositStep] = useState<DepositStep>('amount');
+    const [paymentMethod, setPaymentMethod] = useState<string>('');
+    const [upiRefId, setUpiRefId] = useState<string>('');
+    const [manualDeposits, setManualDeposits] = useState<ManualDepositRequest[]>([]);
+    const [manualDepositsLoading, setManualDepositsLoading] = useState(false);
+    const [depositError, setDepositError] = useState<string | null>(null);
+    const [depositSuccess, setDepositSuccess] = useState<string | null>(null);
+    const [upiInfo, setUpiInfo] = useState<{ upiId: string; accountHolder: string; qrImagePath: string } | null>(null);
+    const [showAllDeposits, setShowAllDeposits] = useState(false);
 
     // ── Withdrawal state ─────────────────────────────────────────────────────
     const [withdrawAmount, setWithdrawAmount] = useState<string>('');
@@ -260,95 +272,72 @@ const DashboardPage: React.FC = () => {
         }
     };
 
-    // ── Load Razorpay checkout script once ────────────────────────────────────
+    // ── Load UPI info on mount ────────────────────────────────────────────────
     useEffect(() => {
-        if (razorpayLoaded.current) return;
-        const script = document.createElement('script');
-        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-        script.async = true;
-        script.onload = () => { razorpayLoaded.current = true; };
-        document.body.appendChild(script);
+        getUpiInfo()
+            .then((res) => setUpiInfo(res))
+            .catch(() => { /* fallback handled in UI */ });
     }, []);
 
-    // ── Handle Add Money ── creates order → opens Razorpay modal → verifies ──
-    const handleAddMoney = async () => {
-        const amount = parseFloat(topUpAmount);
+    // ── Fetch manual deposits when Wallet tab is active ───────────────────────
+    useEffect(() => {
+        if (activeTab !== 'Wallet') return;
+        setManualDepositsLoading(true);
+        getManualDeposits(1, 50)
+            .then((res) => setManualDeposits(res.requests ?? []))
+            .catch(() => { /* non-critical */ })
+            .finally(() => setManualDepositsLoading(false));
+    }, [activeTab]);
+
+    // ── Handle Manual Deposit Submit ──────────────────────────────────────────
+    const handleManualDepositSubmit = async () => {
+        setDepositError(null);
+        setDepositSuccess(null);
+        const amount = parseInt(topUpAmount);
         if (!amount || isNaN(amount) || amount < 10) {
-            showToast('Please enter a valid amount (minimum ₹10)', 'error');
+            setDepositError('Please enter a valid amount (minimum ₹10)');
             return;
         }
         if (amount > 50000) {
-            showToast('Maximum top-up is ₹50,000', 'error');
+            setDepositError('Maximum top-up is ₹50,000');
             return;
         }
-        if (!razorpayLoaded.current) {
-            showToast('Razorpay is loading, please try again in a moment', 'error');
+        if (!paymentMethod) {
+            setDepositError('Please select a payment method');
+            return;
+        }
+        if (!upiRefId.trim() || upiRefId.trim().length < 6) {
+            setDepositError('Please enter a valid UPI Reference ID (at least 6 characters)');
             return;
         }
 
+        setAddMoneyLoading(true);
         try {
-            setAddMoneyLoading(true);
-            const orderRes = await createTopUpOrder(amount);
-
-            const options = {
-                key: orderRes.razorpayKeyId,
-                amount: orderRes.order.amount,   // in paise
-                currency: orderRes.order.currency,
-                name: 'BattleXground',
-                description: `Wallet Top-Up — ₹${amount}`,
-                order_id: orderRes.order.id,
-                handler: async (paymentResponse: {
-                    razorpay_order_id: string;
-                    razorpay_payment_id: string;
-                    razorpay_signature: string;
-                }) => {
-                    try {
-                        const verifyRes = await verifyTopUp({
-                            razorpay_order_id: paymentResponse.razorpay_order_id,
-                            razorpay_payment_id: paymentResponse.razorpay_payment_id,
-                            razorpay_signature: paymentResponse.razorpay_signature,
-                        });
-                        setLiveBalance(verifyRes.walletBalance);
-                        setWalletTxns((prev) => [
-                            {
-                                _id: verifyRes.transaction.id,
-                                type: 'credit' as const,
-                                amount: verifyRes.transaction.amount,
-                                balanceAfter: verifyRes.walletBalance,
-                                description: verifyRes.transaction.description,
-                                createdAt: new Date().toISOString(),
-                            },
-                            ...prev,
-                        ]);
-                        updateUser({ walletBalance: verifyRes.walletBalance });
-                        setTopUpAmount('');
-                        showToast(`₹${amount} added to your wallet successfully!`, 'success');
-                    } catch (err: any) {
-                        const msg = err?.response?.data?.message || 'Payment verification failed';
-                        showToast(msg, 'error');
-                    }
-                },
-                prefill: {
-                    name: user?.name || '',
-                    email: user?.email || '',
-                    contact: user?.phone || '',
-                },
-                theme: { color: '#22c55e' },
-                modal: {
-                    ondismiss: () => { setAddMoneyLoading(false); },
-                },
-            };
-
-            const rzp = new (window as any).Razorpay(options);
-            rzp.open();
-            // Reset loading immediately after modal opens
-            // (loading stays false; modal handles its own state)
-            setAddMoneyLoading(false);
+            const res = await submitManualDeposit(amount, paymentMethod, upiRefId.trim());
+            setDepositSuccess(res.message);
+            setManualDeposits((prev) => [res.request, ...prev]);
+            setDepositStep('submitted');
+            setTopUpAmount('');
+            setPaymentMethod('');
+            setUpiRefId('');
+            showToast('Deposit request submitted successfully!', 'success');
         } catch (err: any) {
-            const msg = err?.response?.data?.message || 'Failed to create payment order';
+            const msg = err?.response?.data?.message || 'Failed to submit deposit request';
+            setDepositError(msg);
             showToast(msg, 'error');
+        } finally {
             setAddMoneyLoading(false);
         }
+    };
+
+    // Reset deposit flow
+    const resetDepositFlow = () => {
+        setDepositStep('amount');
+        setDepositError(null);
+        setDepositSuccess(null);
+        setTopUpAmount('');
+        setPaymentMethod('');
+        setUpiRefId('');
     };
 
     const tabs: TabType[] = ['Match History', 'Wallet', 'Profile'];
@@ -1095,7 +1084,7 @@ const DashboardPage: React.FC = () => {
 
                                     {/* Add Money & Withdraw Money */}
                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6 sm:mb-8">
-                                        {/* Add Money */}
+                                        {/* Add Money — Manual UPI Flow */}
                                         <div
                                             className="rounded-xl p-5 sm:p-6"
                                             style={{
@@ -1106,64 +1095,209 @@ const DashboardPage: React.FC = () => {
                                                 boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
                                             }}
                                         >
-                                            <div className="flex items-center gap-2.5 mb-5">
-                                                <div
-                                                    className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
-                                                    style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}
-                                                >
-                                                    ⊕
-                                                </div>
-                                                <h3 className="text-white text-sm font-bold uppercase tracking-wide">Add Money</h3>
-                                            </div>
-
-                                            {/* Amount Input */}
-                                            <div className="mb-4">
-                                                <label className="text-gray-500 text-[10px] uppercase tracking-wider font-semibold mb-2 block">Amount (₹10 – ₹50,000)</label>
-                                                <input
-                                                    type="number"
-                                                    min="10"
-                                                    max="50000"
-                                                    placeholder="Enter amount"
-                                                    value={topUpAmount}
-                                                    onChange={(e) => setTopUpAmount(e.target.value)}
-                                                    className="w-full text-white px-4 py-3 rounded-lg focus:outline-none transition-all text-sm"
-                                                    style={{
-                                                        background: 'rgba(255,255,255,0.04)',
-                                                        border: '1px solid rgba(255,255,255,0.08)',
-                                                    }}
-                                                    onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(34,197,94,0.4)'; }}
-                                                    onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
-                                                />
-                                            </div>
-
-                                            {/* Quick Amount Buttons */}
-                                            <div className="grid grid-cols-4 gap-2 mb-4">
-                                                {[500, 1000, 2000, 5000].map((amount) => (
-                                                    <button
-                                                        key={amount}
-                                                        onClick={() => setTopUpAmount(String(amount))}
-                                                        className="py-2.5 rounded-lg text-xs font-medium transition-all duration-200"
-                                                        style={{
-                                                            background: 'rgba(255,255,255,0.04)',
-                                                            border: '1px solid rgba(255,255,255,0.06)',
-                                                            color: 'rgba(255,255,255,0.5)',
-                                                        }}
-                                                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34,197,94,0.12)'; e.currentTarget.style.color = '#22C55E'; e.currentTarget.style.borderColor = 'rgba(34,197,94,0.3)'; }}
-                                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                                            <div className="flex items-center justify-between mb-5">
+                                                <div className="flex items-center gap-2.5">
+                                                    <div
+                                                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm"
+                                                        style={{ background: 'rgba(34,197,94,0.15)', color: '#22C55E' }}
                                                     >
-                                                        ₹{amount}
+                                                        ⊕
+                                                    </div>
+                                                    <h3 className="text-white text-sm font-bold uppercase tracking-wide">Add Money</h3>
+                                                </div>
+                                                {depositStep !== 'amount' && (
+                                                    <button
+                                                        onClick={resetDepositFlow}
+                                                        className="text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                                                    >
+                                                        ← Back
                                                     </button>
-                                                ))}
+                                                )}
                                             </div>
 
-                                            <button
-                                                onClick={handleAddMoney}
-                                                disabled={addMoneyLoading || !topUpAmount.trim()}
-                                                className="w-full py-3 rounded-lg font-semibold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
-                                                style={{ background: 'linear-gradient(135deg, #22C55E, #16A34A)', boxShadow: '0 0 14px rgba(34,197,94,0.2)' }}
-                                            >
-                                                {addMoneyLoading ? 'Processing...' : 'Add Money via Razorpay'}
-                                            </button>
+                                            {/* Step indicator */}
+                                            {depositStep !== 'submitted' && (
+                                                <div className="flex items-center gap-1 mb-5">
+                                                    {['amount', 'qr', 'form'].map((step, idx) => (
+                                                        <React.Fragment key={step}>
+                                                            <div
+                                                                className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300"
+                                                                style={{
+                                                                    background: depositStep === step ? '#22C55E' : (['amount', 'qr', 'form'].indexOf(depositStep) > idx ? 'rgba(34,197,94,0.3)' : 'rgba(255,255,255,0.06)'),
+                                                                    color: depositStep === step ? '#fff' : (['amount', 'qr', 'form'].indexOf(depositStep) > idx ? '#22C55E' : 'rgba(255,255,255,0.3)'),
+                                                                }}
+                                                            >
+                                                                {['amount', 'qr', 'form'].indexOf(depositStep) > idx ? '✓' : idx + 1}
+                                                            </div>
+                                                            {idx < 2 && (
+                                                                <div className="flex-1 h-px" style={{ background: ['amount', 'qr', 'form'].indexOf(depositStep) > idx ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.06)' }} />
+                                                            )}
+                                                        </React.Fragment>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* Error banner */}
+                                            {depositError && (
+                                                <div className="mb-4 p-3 rounded-lg text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#EF4444' }}>
+                                                    <svg className="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg> {depositError}
+                                                </div>
+                                            )}
+
+                                            {/* STEP 1: Amount */}
+                                            {depositStep === 'amount' && (
+                                                <>
+                                                    <div className="mb-4">
+                                                        <label className="text-gray-500 text-[10px] uppercase tracking-wider font-semibold mb-2 block">Amount (₹10 – ₹50,000)</label>
+                                                        <input
+                                                            type="number"
+                                                            min="10"
+                                                            max="50000"
+                                                            placeholder="Enter amount"
+                                                            value={topUpAmount}
+                                                            onChange={(e) => setTopUpAmount(e.target.value)}
+                                                            className="w-full text-white px-4 py-3 rounded-lg focus:outline-none transition-all text-sm"
+                                                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                                            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(34,197,94,0.4)'; }}
+                                                            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                                                        />
+                                                    </div>
+                                                    <div className="grid grid-cols-4 gap-2 mb-4">
+                                                        {[500, 1000, 2000, 5000].map((amt) => (
+                                                            <button
+                                                                key={amt}
+                                                                onClick={() => setTopUpAmount(String(amt))}
+                                                                className="py-2.5 rounded-lg text-xs font-medium transition-all duration-200"
+                                                                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}
+                                                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(34,197,94,0.12)'; e.currentTarget.style.color = '#22C55E'; e.currentTarget.style.borderColor = 'rgba(34,197,94,0.3)'; }}
+                                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; }}
+                                                            >
+                                                                ₹{amt.toLocaleString()}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            const amt = parseInt(topUpAmount);
+                                                            if (!amt || amt < 10) { setDepositError('Minimum amount is ₹10'); return; }
+                                                            if (amt > 50000) { setDepositError('Maximum amount is ₹50,000'); return; }
+                                                            setDepositError(null);
+                                                            setDepositStep('qr');
+                                                        }}
+                                                        disabled={!topUpAmount.trim()}
+                                                        className="w-full py-3 rounded-lg font-semibold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        style={{ background: 'linear-gradient(135deg, #22C55E, #16A34A)', boxShadow: '0 0 14px rgba(34,197,94,0.2)' }}
+                                                    >
+                                                        Continue to Payment →
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* STEP 2: QR Code */}
+                                            {depositStep === 'qr' && (
+                                                <>
+                                                    <div className="text-center mb-4">
+                                                        <p className="text-gray-400 text-xs mb-1">Pay <span className="text-white font-bold text-lg">₹{parseInt(topUpAmount).toLocaleString()}</span> to</p>
+                                                        <p className="text-green-400 font-bold text-sm">{upiInfo?.upiId || 'medeep@slc'}</p>
+                                                        <p className="text-gray-500 text-xs mt-0.5">{upiInfo?.accountHolder || 'Deepanshu Kashyap'}</p>
+                                                    </div>
+                                                    <div className="flex justify-center mb-4">
+                                                        <div className="bg-white rounded-xl p-3" style={{ maxWidth: '200px' }}>
+                                                            <img
+                                                                src={upiInfo?.qrImagePath || '/upi-qr.jpeg'}
+                                                                alt="UPI QR Code"
+                                                                className="w-full h-auto"
+                                                                style={{ imageRendering: 'crisp-edges' }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg mb-4 text-xs" style={{ background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.15)', color: '#EAB308' }}>
+                                                        <p className="font-semibold mb-1">📱 How to pay:</p>
+                                                        <ol className="list-decimal list-inside space-y-0.5 text-gray-400">
+                                                            <li>Open GPay / PhonePe / Paytm</li>
+                                                            <li>Scan this QR code or pay to UPI ID above</li>
+                                                            <li>Pay exactly <span className="text-white font-semibold">₹{parseInt(topUpAmount).toLocaleString()}</span></li>
+                                                            <li>Note your <span className="text-yellow-400 font-semibold">UPI Reference ID</span></li>
+                                                        </ol>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => { setDepositError(null); setDepositStep('form'); }}
+                                                        className="w-full py-3 rounded-lg font-semibold text-sm text-white transition-all duration-200"
+                                                        style={{ background: 'linear-gradient(135deg, #22C55E, #16A34A)', boxShadow: '0 0 14px rgba(34,197,94,0.2)' }}
+                                                    >
+                                                        I've Completed Payment →
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* STEP 3: Payment Proof Form */}
+                                            {depositStep === 'form' && (
+                                                <>
+                                                    <div className="mb-4">
+                                                        <label className="text-gray-500 text-[10px] uppercase tracking-wider font-semibold mb-2 block">Payment Method *</label>
+                                                        <select
+                                                            value={paymentMethod}
+                                                            onChange={(e) => setPaymentMethod(e.target.value)}
+                                                            className="w-full text-white px-4 py-3 rounded-lg focus:outline-none transition-all text-sm appearance-none cursor-pointer"
+                                                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                                        >
+                                                            <option value="" style={{ background: '#1a1a1a' }}>Select payment method...</option>
+                                                            <option value="gpay" style={{ background: '#1a1a1a' }}>Google Pay (GPay)</option>
+                                                            <option value="phonepe" style={{ background: '#1a1a1a' }}>PhonePe</option>
+                                                            <option value="paytm" style={{ background: '#1a1a1a' }}>Paytm</option>
+                                                            <option value="upi_other" style={{ background: '#1a1a1a' }}>UPI Other</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="mb-4">
+                                                        <label className="text-gray-500 text-[10px] uppercase tracking-wider font-semibold mb-2 block">UPI Reference ID *</label>
+                                                        <input
+                                                            type="text"
+                                                            placeholder="e.g. 412345678901"
+                                                            value={upiRefId}
+                                                            onChange={(e) => setUpiRefId(e.target.value.replace(/[^a-zA-Z0-9\-_]/g, '').toUpperCase())}
+                                                            maxLength={50}
+                                                            className="w-full text-white px-4 py-3 rounded-lg focus:outline-none transition-all text-sm font-mono"
+                                                            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}
+                                                            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(34,197,94,0.4)'; }}
+                                                            onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                                                        />
+                                                        <p className="text-gray-600 text-[10px] mt-1">Find this in your UPI app's transaction details</p>
+                                                    </div>
+                                                    <div className="p-3 rounded-lg mb-4 text-xs" style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.15)', color: '#60A5FA' }}>
+                                                        <p>⏱ Payment will be verified within <strong className="text-white">2–3 hours</strong>. Please ensure you add money before joining tournaments. For issues, contact support.</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleManualDepositSubmit}
+                                                        disabled={addMoneyLoading || !paymentMethod || !upiRefId.trim()}
+                                                        className="w-full py-3 rounded-lg font-semibold text-sm text-white transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                                                        style={{ background: 'linear-gradient(135deg, #22C55E, #16A34A)', boxShadow: '0 0 14px rgba(34,197,94,0.2)' }}
+                                                    >
+                                                        {addMoneyLoading ? 'Submitting...' : 'Submit Deposit Request'}
+                                                    </button>
+                                                </>
+                                            )}
+
+                                            {/* STEP 4: Submitted */}
+                                            {depositStep === 'submitted' && (
+                                                <div className="text-center py-4">
+                                                    <div className="w-16 h-16 mx-auto mb-4 rounded-full flex items-center justify-center" style={{ background: 'rgba(34,197,94,0.15)' }}>
+                                                        <svg className="w-8 h-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    </div>
+                                                    <h4 className="text-white font-bold text-lg mb-2">Request Submitted!</h4>
+                                                    <p className="text-gray-400 text-sm mb-1">{depositSuccess || 'Your deposit request has been submitted.'}</p>
+                                                    <div className="inline-block mt-3 px-3 py-1.5 rounded-full text-xs font-bold" style={{ background: 'rgba(234,179,8,0.1)', color: '#EAB308', border: '1px solid rgba(234,179,8,0.2)' }}>
+                                                        ⏳ Pending Verification
+                                                    </div>
+                                                    <button
+                                                        onClick={resetDepositFlow}
+                                                        className="block mx-auto mt-5 text-sm text-gray-500 hover:text-white transition-colors underline"
+                                                    >
+                                                        Add more money
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Withdraw Money */}
@@ -1314,7 +1448,7 @@ const DashboardPage: React.FC = () => {
                                                         style={showAllTxns ? { maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' } : {}}
                                                     >
                                                         {visibleTxns.map((txn) => {
-                                                            const isIncome = ['credit', 'winning_credit', 'withdrawal_refund', 'refund'].includes(txn.type as string);
+                                                            const isIncome = ['credit', 'winning_credit', 'withdrawal_refund', 'refund', 'manual_deposit'].includes(txn.type as string);
                                                             const icon = txn.type === 'winning_credit' ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
                                                                 : txn.type === 'withdrawal_refund' ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" /></svg>
                                                                     : txn.type === 'withdrawal_request' ? <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8"><path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
@@ -1475,6 +1609,100 @@ const DashboardPage: React.FC = () => {
                                                                 <><span>Show Less</span><span style={{ fontSize: '10px' }}>▲</span></>
                                                             ) : (
                                                                 <><span>Show All ({sortedWRs.length - 3} more)</span><span style={{ fontSize: '10px' }}>▼</span></>
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                </>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Deposit Request History */}
+                                    <div
+                                        className="mt-4 rounded-xl p-5 sm:p-6"
+                                        style={{
+                                            background: 'rgba(0,0,0,0.55)',
+                                            backdropFilter: 'blur(20px) saturate(1.6)',
+                                            WebkitBackdropFilter: 'blur(20px) saturate(1.6)',
+                                            border: '1px solid rgba(255,255,255,0.07)',
+                                            boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between mb-5">
+                                            <h3 className="text-sm font-bold text-white uppercase tracking-wide">Deposit Requests</h3>
+                                            {manualDeposits.length > 0 && (
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md" style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)' }}>
+                                                    {manualDeposits.length} total
+                                                </span>
+                                            )}
+                                        </div>
+                                        {manualDepositsLoading ? (
+                                            <p className="text-gray-500 text-center py-6 text-sm">Loading deposit requests...</p>
+                                        ) : manualDeposits.length === 0 ? (
+                                            <div className="text-center py-8">
+                                                <div className="mb-2 opacity-40"><svg className="w-8 h-8 mx-auto text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></div>
+                                                <p className="text-gray-500 text-sm">No deposit requests yet. Add money to get started!</p>
+                                            </div>
+                                        ) : (() => {
+                                            const sortedDeps = [...manualDeposits].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                                            const visibleDeps = showAllDeposits ? sortedDeps : sortedDeps.slice(0, 3);
+                                            const hasMoreDeps = sortedDeps.length > 3;
+                                            const PAYMENT_LABELS: Record<string, string> = { gpay: 'GPay', phonepe: 'PhonePe', paytm: 'Paytm', upi_other: 'UPI' };
+                                            return (
+                                                <>
+                                                    <div
+                                                        className="space-y-2 transition-all duration-300"
+                                                        style={showAllDeposits ? { maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' } : {}}
+                                                    >
+                                                        {visibleDeps.map((dep) => {
+                                                            const statusColors: Record<string, { bg: string; text: string; border: string; label: string }> = {
+                                                                pending: { bg: 'rgba(234,179,8,0.08)', text: '#EAB308', border: 'rgba(234,179,8,0.15)', label: '⏳ Pending' },
+                                                                approved: { bg: 'rgba(34,197,94,0.08)', text: '#22C55E', border: 'rgba(34,197,94,0.15)', label: '✅ Approved' },
+                                                                rejected: { bg: 'rgba(239,68,68,0.08)', text: '#EF4444', border: 'rgba(239,68,68,0.15)', label: '❌ Rejected' },
+                                                            };
+                                                            const sc = statusColors[dep.status] || statusColors.pending;
+                                                            return (
+                                                                <div
+                                                                    key={dep._id}
+                                                                    className="group flex items-start justify-between p-3 sm:p-4 rounded-lg transition-all duration-200"
+                                                                    style={{ background: sc.bg, border: `1px solid ${sc.border}` }}
+                                                                    onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(2px)'; }}
+                                                                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateX(0)'; }}
+                                                                >
+                                                                    <div className="flex-1 min-w-0">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <span className="text-xs font-bold" style={{ color: sc.text }}>{sc.label}</span>
+                                                                            <span className="text-gray-600 text-xs">•</span>
+                                                                            <span className="text-gray-500 text-xs">
+                                                                                {new Date(dep.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                                            </span>
+                                                                        </div>
+                                                                        <p className="text-gray-500 text-xs">
+                                                                            {PAYMENT_LABELS[dep.paymentMethod] || dep.paymentMethod} · Ref: <span className="text-gray-400 font-mono">{dep.upiReferenceId}</span>
+                                                                        </p>
+                                                                        {dep.adminNote && (
+                                                                            <p className="text-xs mt-1" style={{ color: '#EF4444' }}>Reason: {dep.adminNote}</p>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-right ml-3 flex-shrink-0">
+                                                                        <p className="text-white font-bold text-sm">₹{(dep.amount ?? 0).toLocaleString()}</p>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                    {hasMoreDeps && (
+                                                        <button
+                                                            onClick={() => setShowAllDeposits(!showAllDeposits)}
+                                                            className="w-full mt-3 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-1.5"
+                                                            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.45)' }}
+                                                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,140,0,0.1)'; e.currentTarget.style.borderColor = 'rgba(255,140,0,0.25)'; e.currentTarget.style.color = '#FF8C00'; }}
+                                                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
+                                                        >
+                                                            {showAllDeposits ? (
+                                                                <><span>Show Less</span><span style={{ fontSize: '10px' }}>▲</span></>
+                                                            ) : (
+                                                                <><span>Show All ({sortedDeps.length - 3} more)</span><span style={{ fontSize: '10px' }}>▼</span></>
                                                             )}
                                                         </button>
                                                     )}

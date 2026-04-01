@@ -49,7 +49,7 @@ const PrivacyPolicyPage: React.FC = () => (
         <li>
           <strong className="text-white">Financial Data:</strong> UPI ID for withdrawal processing.
           We do not store full credit/debit card numbers or CVVs — payment processing is handled
-          exclusively by Razorpay.
+          exclusively via UPI QR-based manual payment.
         </li>
         <li>
           <strong className="text-white">Device & Usage Data:</strong> IP address, browser type,
@@ -87,18 +87,9 @@ const PrivacyPolicyPage: React.FC = () => (
       <p>We share your personal data only in limited circumstances:</p>
       <ul className="list-disc pl-5 space-y-2">
         <li>
-          <strong className="text-white">Razorpay:</strong> Our payment gateway. Razorpay processes
-          all financial transactions and has access to the data required to complete payments. Their
-          privacy policy is available at{' '}
-          <a
-            href="https://razorpay.com/privacy/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: '#FF8C00' }}
-          >
-            razorpay.com/privacy
-          </a>
-          .
+          <strong className="text-white">UPI Payment Processing:</strong> Your deposit requests are
+          manually verified by our admin team. We store your UPI Reference ID and payment method
+          for verification and audit purposes. We do not store your UPI PIN or bank credentials.
         </li>
         <li>
           <strong className="text-white">Cloud Infrastructure:</strong> We use secure cloud hosting

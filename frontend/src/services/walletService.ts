@@ -4,7 +4,7 @@ import api from './api';
 
 export interface WalletTransaction {
     _id: string;
-    type: 'credit' | 'debit' | 'tournament_entry' | 'tournament_refund' | 'winning_credit' | 'withdrawal_request' | 'withdrawal_refund';
+    type: 'credit' | 'debit' | 'tournament_entry' | 'tournament_refund' | 'winning_credit' | 'withdrawal_request' | 'withdrawal_refund' | 'manual_deposit' | 'manual_deposit_rejected';
     amount: number;
     balanceAfter: number;
     description: string;
@@ -26,32 +26,39 @@ export interface WalletBalanceResponse {
     pagination: { page: number; limit: number; total: number; pages: number };
 }
 
-export interface TopUpOrderResponse {
-    success: boolean;
-    order: {
-        id: string;
-        amount: number;     // in paise
-        amountRupees: number;
-        currency: string;
-    };
-    razorpayKeyId: string;
+// ─── Manual Deposit types ─────────────────────────────────────────────────────
+
+export interface ManualDepositRequest {
+    _id: string;
+    amount: number;
+    paymentMethod: 'gpay' | 'phonepe' | 'paytm' | 'upi_other';
+    upiReferenceId: string;
+    status: 'pending' | 'approved' | 'rejected';
+    adminNote?: string | null;
+    createdAt: string;
+    verifiedAt?: string;
 }
 
-export interface VerifyTopUpResponse {
+export interface ManualDepositResponse {
     success: boolean;
     message: string;
-    walletBalance: number;
-    transaction: {
-        id: string;
-        amount: number;
-        type: string;
-        description: string;
-    };
+    request: ManualDepositRequest;
+}
+
+export interface ManualDepositsListResponse {
+    success: boolean;
+    requests: ManualDepositRequest[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+export interface UpiInfoResponse {
+    success: boolean;
+    upiId: string;
+    accountHolder: string;
+    qrImagePath: string;
 }
 
 // ─── Withdrawal types ─────────────────────────────────────────────────────────
-
-
 
 export interface WithdrawalRequest {
     _id: string;
@@ -83,19 +90,35 @@ export interface WithdrawalsListResponse {
 
 // ─── API calls ────────────────────────────────────────────────────────────────
 
-export const createTopUpOrder = async (amountRupees: number): Promise<TopUpOrderResponse> => {
-    const response = await api.post('/wallet/create-order', { amount: amountRupees });
+// ── Manual Deposit endpoints ──────────────────────────────────────────────────
+
+export const submitManualDeposit = async (
+    amount: number,
+    paymentMethod: string,
+    upiReferenceId: string
+): Promise<ManualDepositResponse> => {
+    const response = await api.post('/wallet/manual-deposit', {
+        amount,
+        paymentMethod,
+        upiReferenceId,
+    });
     return response.data;
 };
 
-export const verifyTopUp = async (payload: {
-    razorpay_order_id: string;
-    razorpay_payment_id: string;
-    razorpay_signature: string;
-}): Promise<VerifyTopUpResponse> => {
-    const response = await api.post('/wallet/verify', payload);
+export const getManualDeposits = async (
+    page = 1,
+    limit = 20
+): Promise<ManualDepositsListResponse> => {
+    const response = await api.get(`/wallet/manual-deposits?page=${page}&limit=${limit}`);
     return response.data;
 };
+
+export const getUpiInfo = async (): Promise<UpiInfoResponse> => {
+    const response = await api.get('/wallet/upi-info');
+    return response.data;
+};
+
+// ── Wallet balance & transactions ─────────────────────────────────────────────
 
 export const getWalletBalance = async (): Promise<WalletBalanceResponse> => {
     const response = await api.get('/wallet/balance');
@@ -109,6 +132,8 @@ export const getTransactionHistory = async (
     const response = await api.get(`/wallet/transactions?page=${page}&limit=${limit}`);
     return response.data;
 };
+
+// ── Withdrawal endpoints ──────────────────────────────────────────────────────
 
 /**
  * Submit a withdrawal request. Holds the amount from the wallet immediately.
@@ -134,8 +159,9 @@ export const getMyWithdrawals = async (
 };
 
 export default {
-    createTopUpOrder,
-    verifyTopUp,
+    submitManualDeposit,
+    getManualDeposits,
+    getUpiInfo,
     getWalletBalance,
     getTransactionHistory,
     requestWithdrawal,

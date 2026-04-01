@@ -22,6 +22,8 @@ const walletTransactionSchema = new mongoose.Schema(
                 'winning_credit',   // Prize money credited to winningBalance
                 'withdrawal_request',// winningBalance held → lockedBalance on withdrawal request
                 'withdrawal_refund', // lockedBalance → winningBalance restored on rejection
+                'manual_deposit',   // Manual UPI QR deposit — credited on admin approval
+                'manual_deposit_rejected', // Manual deposit request rejected by admin
             ],
             required: true,
         },
@@ -59,7 +61,7 @@ const walletTransactionSchema = new mongoose.Schema(
         },
         referenceModel: {
             type: String,
-            enum: ['Payment', 'Tournament', 'WithdrawalRequest', null],
+            enum: ['Payment', 'Tournament', 'WithdrawalRequest', 'ManualPaymentRequest', null],
             default: null,
         },
         // Flexible metadata bucket

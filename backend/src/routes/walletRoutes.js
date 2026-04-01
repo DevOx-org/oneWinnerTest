@@ -4,31 +4,39 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/auth');
 const {
-    createTopUpOrder,
-    verifyTopUp,
     getWalletBalance,
     getTransactionHistory,
     requestWithdrawal,
     getMyWithdrawals,
 } = require('../controllers/walletController');
+const {
+    submitManualDeposit,
+    getMyManualDeposits,
+    getUpiInfo,
+} = require('../controllers/manualPaymentController');
 
 // All wallet routes require authentication
 router.use(protect);
 
 /**
- * POST /api/wallet/create-order
- * Create a Razorpay order for wallet top-up.
- * Body: { amount: <number in rupees> }
+ * POST /api/wallet/manual-deposit
+ * Submit a manual UPI deposit request.
+ * Body: { amount, paymentMethod, upiReferenceId }
  */
-router.post('/create-order', createTopUpOrder);
+router.post('/manual-deposit', submitManualDeposit);
 
 /**
- * POST /api/wallet/verify
- * Verify Razorpay payment signature and credit wallet.
- * Body: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
- * Header: X-Idempotency-Key (optional, recommended)
+ * GET /api/wallet/manual-deposits
+ * Get current user's manual deposit request history.
+ * Query: ?page=1&limit=20
  */
-router.post('/verify', verifyTopUp);
+router.get('/manual-deposits', getMyManualDeposits);
+
+/**
+ * GET /api/wallet/upi-info
+ * Get admin UPI ID and QR info for display.
+ */
+router.get('/upi-info', getUpiInfo);
 
 /**
  * GET /api/wallet/balance

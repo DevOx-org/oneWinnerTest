@@ -113,6 +113,64 @@ export const deleteTournament = async (tournamentId: string): Promise<{ success:
     return response.data;
 };
 
+/**
+ * Manual Payment Management Services
+ */
+export interface AdminManualPayment {
+    _id: string;
+    userId: { _id: string; name: string; email: string; phone?: string } | null;
+    amount: number;
+    paymentMethod: 'gpay' | 'phonepe' | 'paytm' | 'upi_other';
+    upiReferenceId: string;
+    status: 'pending' | 'approved' | 'rejected';
+    adminNote?: string | null;
+    verifiedAt?: string;
+    verifiedBy?: { _id: string; name: string; email: string } | null;
+    createdAt: string;
+}
+
+export interface ManualPaymentsResponse {
+    success: boolean;
+    requests: AdminManualPayment[];
+    pagination: { page: number; limit: number; total: number; pages: number };
+}
+
+export const getManualPayments = async (params: {
+    status?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+}): Promise<ManualPaymentsResponse> => {
+    const queryParams = new URLSearchParams();
+    if (params.status) queryParams.append('status', params.status);
+    if (params.page) queryParams.append('page', params.page.toString());
+    if (params.limit) queryParams.append('limit', params.limit.toString());
+    if (params.search) queryParams.append('search', params.search);
+
+    const response = await api.get<ManualPaymentsResponse>(`/admin/manual-payments?${queryParams.toString()}`);
+    return response.data;
+};
+
+export const approveManualPayment = async (
+    requestId: string
+): Promise<{ success: boolean; message: string; request: AdminManualPayment; newBalance?: number }> => {
+    const response = await api.patch(`/admin/manual-payments/${requestId}/approve`);
+    return response.data;
+};
+
+export const rejectManualPayment = async (
+    requestId: string,
+    adminNote?: string
+): Promise<{ success: boolean; message: string; request: AdminManualPayment }> => {
+    const response = await api.patch(`/admin/manual-payments/${requestId}/reject`, { adminNote });
+    return response.data;
+};
+
+export const getManualPaymentPendingCount = async (): Promise<{ success: boolean; pendingCount: number }> => {
+    const response = await api.get('/admin/manual-payments/pending-count');
+    return response.data;
+};
+
 export default {
     // Analytics
     getAnalyticsOverview,
@@ -128,4 +186,9 @@ export default {
     createTournament,
     updateTournament,
     deleteTournament,
+    // Manual Payments
+    getManualPayments,
+    approveManualPayment,
+    rejectManualPayment,
+    getManualPaymentPendingCount,
 };
