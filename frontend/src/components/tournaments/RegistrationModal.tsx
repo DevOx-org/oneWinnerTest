@@ -34,11 +34,12 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
             const randomSlot = Math.floor(Math.random() * 25) + 1;
             setAssignedSlot(randomSlot);
 
-            // Fetch wallet balance
+            // Fetch wallet balance — use ONLY depositBalance for tournament entries
             setIsLoadingBalance(true);
             getWalletBalance()
                 .then((res) => {
-                    setWalletBalance(res.walletBalance);
+                    // Only deposit balance can be used for tournament entry fees
+                    setWalletBalance(res.wallet?.depositBalance ?? 0);
                 })
                 .catch(() => {
                     setWalletBalance(null);
@@ -272,7 +273,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                                         <svg className="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                                         </svg>
-                                        <span className="text-gray-300 text-sm font-medium">Wallet Balance</span>
+                                        <span className="text-gray-300 text-sm font-medium">Deposit Balance</span>
                                     </div>
                                     {isLoadingBalance ? (
                                         <span className="text-gray-400 text-sm animate-pulse">Loading...</span>
@@ -289,7 +290,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                                         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
                                         </svg>
-                                        Insufficient balance. Please top up your wallet to register.
+                                        Insufficient deposit balance. Only deposited money can be used for entries. Please top up.
                                     </p>
                                 )}
                             </div>
