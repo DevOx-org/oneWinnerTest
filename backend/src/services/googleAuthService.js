@@ -48,8 +48,26 @@ const verifyGoogleToken = async (idToken) => {
             throw error;
         }
 
-        logger.error(`Google token verification failed: ${error.message}`);
-        throw new ApiError('Invalid or expired Google token', 401);
+        // Log the full error for debugging
+        logger.error('Google token verification failed', {
+            errorMessage: error.message,
+            errorName: error.name,
+            stack: error.stack?.split('\n').slice(0, 3).join(' | '),
+        });
+
+        // Provide a more specific error message based on the Google error
+        const msg = error.message || '';
+        if (msg.includes('Token used too late') || msg.includes('expired')) {
+            throw new ApiError('Google token has expired. Please try signing in again.', 401);
+        }
+        if (msg.includes('audience') || msg.includes('client_id')) {
+            throw new ApiError('Google authentication configuration error. Please contact support.', 500);
+        }
+        if (msg.includes('Wrong number of segments') || msg.includes('Invalid token')) {
+            throw new ApiError('Invalid Google token received. Please try again.', 401);
+        }
+
+        throw new ApiError(`Google sign-in failed: ${msg || 'Unknown error'}`, 401);
     }
 };
 
