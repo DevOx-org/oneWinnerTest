@@ -5,14 +5,28 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Primary Meta -->
-  <title>BattleXGround — Compete. Win. Earn.</title>
-  <meta name="description" content="BattleXGround — India's premier competitive gaming platform. Compete in PUBG, Free Fire, Valorant & COD tournaments and win real cash prizes." />
+  <!-- ═══════════════════════════════════════════════
+       PRIMARY SEO META TAGS
+  ═══════════════════════════════════════════════ -->
+  <title>BattleXGround | Online Gaming Tournaments — Compete & Win Real Cash in India</title>
+  <meta name="description" content="BattleXGround (BXG) — India's #1 online gaming tournament platform. Join PUBG, Free Fire, Valorant & COD competitions. Win real cash prizes daily. Register free and compete now!" />
+  <meta name="keywords" content="BattleXGround, BXG, Battle X Ground, battlexground, online gaming tournament India, PUBG tournament, Free Fire tournament, Valorant tournament, COD tournament, esports India, win cash gaming, gaming competition India, mobile gaming tournament, online esports platform" />
   <meta name="author" content="BattleXGround" />
   <meta name="theme-color" content="#0a0a0a" />
-  <meta name="robots" content="index, follow" />
+  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
+  <meta name="googlebot" content="index, follow" />
 
-  <!-- Branding -->
+  <!-- Geographic Targeting -->
+  <meta name="geo.region" content="IN" />
+  <meta name="geo.country" content="India" />
+  <meta name="language" content="English" />
+
+  <!-- Canonical URL — prevents duplicate content issues -->
+  <link rel="canonical" href="https://battlexground.com/" />
+
+  <!-- ═══════════════════════════════════════════════
+       BRANDING & FAVICONS
+  ═══════════════════════════════════════════════ -->
   <link rel="icon" type="image/png" sizes="512x512" href="/favicon.png" />
   <link rel="icon" type="image/png" sizes="192x192" href="/favicon.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
@@ -20,22 +34,117 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/favicon.png" />
   <link rel="manifest" href="/manifest.json" />
 
-  <!-- Open Graph (defaults — overridden per-page by react-helmet-async) -->
-  <meta property="og:title" content="BattleXGround — Compete. Win. Earn." />
-  <meta property="og:description" content="Join daily gaming tournaments on India's #1 esports platform. Play PUBG, Free Fire, Valorant & more." />
+  <!-- ═══════════════════════════════════════════════
+       OPEN GRAPH — Facebook, WhatsApp, LinkedIn
+  ═══════════════════════════════════════════════ -->
   <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://battlexground.com/" />
-  <meta property="og:image" content="https://battlexground.com/images/battlexground-logo.png" />
   <meta property="og:site_name" content="BattleXGround" />
   <meta property="og:locale" content="en_IN" />
+  <meta property="og:url" content="https://battlexground.com/" />
+  <meta property="og:title" content="BattleXGround — Compete in Gaming Tournaments & Win Real Cash" />
+  <meta property="og:description" content="Join India's #1 online esports platform. Play PUBG, Free Fire, Valorant & COD tournaments. Win real cash prizes daily. Free to join — compete now on BattleXGround!" />
+  <meta property="og:image" content="https://battlexground.com/favicon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="BattleXGround — Online Gaming Tournament Platform India" />
 
-  <!-- Twitter Card -->
+  <!-- ═══════════════════════════════════════════════
+       TWITTER CARD
+  ═══════════════════════════════════════════════ -->
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="BattleXGround — Compete. Win. Earn." />
-  <meta name="twitter:description" content="India's premier esports tournament platform. Compete & win real cash prizes." />
-  <meta name="twitter:image" content="https://battlexground.com/images/battlexground-logo.png" />
+  <meta name="twitter:site" content="@battlexground" />
+  <meta name="twitter:creator" content="@battlexground" />
+  <meta name="twitter:title" content="BattleXGround — Gaming Tournaments. Win Real Cash." />
+  <meta name="twitter:description" content="India's #1 esports tournament platform. PUBG, Free Fire, Valorant & COD. Win real cash prizes daily. Join free!" />
+  <meta name="twitter:image" content="https://battlexground.com/favicon-512.png" />
 
-  <!-- Performance: Preconnect -->
+  <!-- ═══════════════════════════════════════════════
+       JSON-LD STRUCTURED DATA (Rich Results)
+  ═══════════════════════════════════════════════ -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://battlexground.com/#organization",
+        "name": "BattleXGround",
+        "alternateName": ["BXG", "Battle X Ground", "battlexground"],
+        "url": "https://battlexground.com",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://battlexground.com/favicon-512.png",
+          "width": 512,
+          "height": 512
+        },
+        "description": "BattleXGround is India's premier online gaming tournament platform where players compete in PUBG, Free Fire, Valorant and COD to win real cash prizes.",
+        "foundingDate": "2024",
+        "areaServed": "IN",
+        "knowsAbout": ["Online Gaming", "Esports", "PUBG Tournaments", "Free Fire Tournaments", "Valorant Tournaments", "COD Tournaments"],
+        "sameAs": [
+          "https://instagram.com/battlexground"
+        ]
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://battlexground.com/#website",
+        "url": "https://battlexground.com",
+        "name": "BattleXGround",
+        "description": "India's #1 online gaming tournament platform. Compete in PUBG, Free Fire, Valorant & COD and win real cash prizes.",
+        "publisher": {
+          "@id": "https://battlexground.com/#organization"
+        },
+        "inLanguage": "en-IN",
+        "potentialAction": {
+          "@type": "SearchAction",
+          "target": {
+            "@type": "EntryPoint",
+            "urlTemplate": "https://battlexground.com/tournaments?q={search_term_string}"
+          },
+          "query-input": "required name=search_term_string"
+        }
+      },
+      {
+        "@type": "WebPage",
+        "@id": "https://battlexground.com/#webpage",
+        "url": "https://battlexground.com",
+        "name": "BattleXGround | Online Gaming Tournaments — Compete & Win Real Cash in India",
+        "isPartOf": {
+          "@id": "https://battlexground.com/#website"
+        },
+        "about": {
+          "@id": "https://battlexground.com/#organization"
+        },
+        "description": "BattleXGround — India's #1 online gaming tournament platform. Join PUBG, Free Fire, Valorant & COD competitions. Win real cash prizes daily.",
+        "breadcrumb": {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Home",
+              "item": "https://battlexground.com/"
+            }
+          ]
+        }
+      },
+      {
+        "@type": "SportsOrganization",
+        "name": "BattleXGround Esports",
+        "url": "https://battlexground.com",
+        "sport": "Esports",
+        "areaServed": {
+          "@type": "Country",
+          "name": "India"
+        }
+      }
+    ]
+  }
+  </script>
+
+  <!-- ═══════════════════════════════════════════════
+       PERFORMANCE
+  ═══════════════════════════════════════════════ -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="dns-prefetch" href="https://accounts.google.com" />
