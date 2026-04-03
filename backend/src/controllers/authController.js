@@ -5,7 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
 const bcrypt = require('bcryptjs');
-const { sendWelcomeEmail, sendOtpEmail } = require('../config/email');
+const { sendWelcomeEmail, sendOtpEmail, sendLoginEmail } = require('../config/email');
 const { verifyGoogleToken } = require('../services/googleAuthService');
 
 // ─── Register ────────────────────────────────────────────────────────────────
@@ -52,6 +52,9 @@ const login = asyncHandler(async (req, res) => {
 
     const token = user.generateToken();
     logger.info(`User logged in successfully: ${email}`);
+
+    // Non-blocking login notification email
+    sendLoginEmail(user.email, user.name);
 
     res.status(200).json({
         success: true,
@@ -194,6 +197,9 @@ const googleLogin = asyncHandler(async (req, res) => {
         }
 
         logger.info(`Existing user Google login (merged): ${email}`);
+
+        // Non-blocking login notification for returning Google users
+        sendLoginEmail(user.email, user.name);
     } else {
         // Case B — New user via Google
         user = await User.create({

@@ -300,12 +300,14 @@ async function getTransactionHistory(userId, page = 1, limit = 20) {
     const winningBalance = user?.winningBalance ?? 0;
     const lockedBalance = user?.lockedBalance ?? 0;
     const lifetimeWithdrawn = user?.lifetimeWithdrawn ?? 0;
+    // Computed dynamically — never stored in DB
+    const totalEarnings = Math.max(0, winningBalance + lifetimeWithdrawn);
 
     return {
         // Legacy field — total spendable (virtual walletBalance)
         balance: depositBalance + winningBalance,
         // New breakdown
-        wallet: { depositBalance, winningBalance, lockedBalance, lifetimeWithdrawn },
+        wallet: { depositBalance, winningBalance, lockedBalance, lifetimeWithdrawn, totalEarnings },
         transactions,
         pagination: {
             page: parseInt(page),
@@ -331,6 +333,8 @@ async function getWalletBalanceDetails(userId) {
     const winningBalance = user.winningBalance ?? 0;
     const lockedBalance = user.lockedBalance ?? 0;
     const lifetimeWithdrawn = user.lifetimeWithdrawn ?? 0;
+    // Computed dynamically — never stored in DB
+    const totalEarnings = Math.max(0, winningBalance + lifetimeWithdrawn);
 
     return {
         // Backward-compat total
@@ -340,6 +344,7 @@ async function getWalletBalanceDetails(userId) {
         winningBalance,
         lockedBalance,
         lifetimeWithdrawn,
+        wallet: { depositBalance, winningBalance, lockedBalance, lifetimeWithdrawn, totalEarnings },
     };
 }
 

@@ -84,4 +84,24 @@ router.get('/manual-payments/pending-count', getManualPaymentPendingCount);
 router.patch('/manual-payments/:id/approve', approveManualPayment);
 router.patch('/manual-payments/:id/reject', rejectManualPayment);
 
+// ── Email Diagnostic (admin only) ─────────────────────────────────────────────
+// POST /api/admin/email-diagnostic?to=test@example.com
+// Sends a test email to verify EMAIL_USER / EMAIL_PASS are working on production.
+const { sendEmailDiagnostic } = require('../config/email');
+const asyncHandler = require('../utils/asyncHandler');
+const ApiError = require('../utils/ApiError');
+
+router.post('/email-diagnostic', asyncHandler(async (req, res) => {
+    const to = req.query.to || req.body.to;
+    if (!to) throw new ApiError('Provide ?to=email query param or body.to', 400);
+    const result = await sendEmailDiagnostic(to);
+    res.status(result.success ? 200 : 500).json({
+        success: result.success,
+        message: result.success
+            ? `Diagnostic email sent to ${to} — check inbox (and spam folder).`
+            : `Email failed: ${result.error}`,
+        detail: result,
+    });
+}));
+
 module.exports = router;

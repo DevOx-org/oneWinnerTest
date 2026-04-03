@@ -21,6 +21,7 @@ export interface WalletBalanceResponse {
         winningBalance: number;
         lockedBalance: number;
         lifetimeWithdrawn: number;
+        totalEarnings: number;
     };
     recentTransactions: WalletTransaction[];
     pagination: { page: number; limit: number; total: number; pages: number };
