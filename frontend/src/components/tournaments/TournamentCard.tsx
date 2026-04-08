@@ -17,12 +17,19 @@ const TournamentCard: React.FC<TournamentCardProps> = ({ tournament, onRefresh }
     const isRegistered = tournament.isRegistered === true;
 
     // ── Server-time-driven match status ──────────────────────────────────────
-    const { status, buttonText } = useMatchStatus(
+    const { status: timeStatus, buttonText: timeButtonText } = useMatchStatus(
         tournament.startDateISO,
         tournament.endDateISO
     );
 
-
+    // ── Slots-full override ──────────────────────────────────────────────────
+    // When all slots are taken and the tournament is still time-wise OPEN,
+    // treat it as REGISTRATION CLOSED so the button is disabled and the badge
+    // reflects reality. Other statuses (LIVE, COMPLETED, already REG CLOSED)
+    // are left untouched.
+    const slotsFull = tournament.currentPlayers >= tournament.maxPlayers;
+    const status = (slotsFull && timeStatus === 'OPEN') ? 'REGISTRATION CLOSED' as const : timeStatus;
+    const buttonText = (slotsFull && timeStatus === 'OPEN') ? 'Registration Closed' : timeButtonText;
 
     // ── Status badge styling ─────────────────────────────────────────────────
     const getStatusStyle = (): { bg: string; text: string; glow: string } => {
