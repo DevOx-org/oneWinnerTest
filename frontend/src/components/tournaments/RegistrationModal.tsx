@@ -28,11 +28,11 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
         teamMember4: '',
     });
 
-    // Generate random slot and fetch wallet balance when modal opens
+    // Fetch wallet balance when modal opens
+    // Note: slot is assigned by the backend (sequential) — we don't generate it here
     useEffect(() => {
         if (isOpen) {
-            const randomSlot = Math.floor(Math.random() * 25) + 1;
-            setAssignedSlot(randomSlot);
+            setAssignedSlot(0); // Reset — will be set from backend response
 
             // Fetch wallet balance — use ONLY depositBalance for tournament entries
             setIsLoadingBalance(true);
@@ -83,7 +83,6 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
 
         try {
             const response = await registerForTournament(tournament.id, {
-                assignedSlot,
                 teamLeaderName: teamData.teamLeaderName,
                 leaderGameName: teamData.leaderGameName,
                 teamMember2: teamData.teamMember2,
@@ -92,6 +91,8 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
             });
             toast.success(response.message || 'Registration successful!');
             setWalletBalance(response.walletBalance);
+            // Set the slot from the backend response (sequential assignment)
+            setAssignedSlot(response.registration.assignedSlot);
 
             // Update AuthContext so the Dashboard immediately reflects
             // the new wallet balance AND the incremented matchCount
@@ -152,10 +153,10 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                             <h3 className="text-white font-semibold mb-3">Assigned Time Slot</h3>
                             <div className="bg-dark-700/50 border-2 border-primary-orange rounded-xl p-4 text-center">
                                 <p className="text-primary-orange text-xl font-bold mb-1">
-                                    Slot-{assignedSlot}, {tournament.time}
+                                    {assignedSlot > 0 ? `Slot-${assignedSlot}` : 'Auto-assigned on registration'}, {tournament.time}
                                 </p>
                                 <p className="text-gray-400 text-sm">
-                                    Your tournament slot has been automatically assigned
+                                    Your tournament slot will be assigned sequentially
                                 </p>
                             </div>
                         </div>
@@ -262,7 +263,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                                 </div>
                                 <div>
                                     <p className="text-gray-400 text-xs mb-1">Your Slot</p>
-                                    <p className="text-white font-bold text-lg">Slot-{assignedSlot}</p>
+                                    <p className="text-white font-bold text-lg">{assignedSlot > 0 ? `Slot-${assignedSlot}` : 'Pending'}</p>
                                 </div>
                             </div>
 
@@ -339,7 +340,6 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                 entryFee={tournament.entryFee}
                 walletBalance={walletBalance ?? 0}
                 tournamentTitle={`${tournament.title} — ${tournament.game}`}
-                slot={assignedSlot}
                 onConfirm={handleConfirmedSubmit}
                 onCancel={() => setShowConfirmModal(false)}
                 isProcessing={isProcessing}

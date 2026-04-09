@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { VALID_MATCH_TYPES, MATCH_TYPE_SLOTS } = require('../utils/matchTypes');
 
 const tournamentSchema = new mongoose.Schema(
     {
@@ -25,6 +26,14 @@ const tournamentSchema = new mongoose.Schema(
             type: String,
             required: [true, 'Please specify the platform'],
             enum: ['Mobile', 'PC', 'Console', 'Cross-Platform'],
+        },
+        // ── Match type — drives auto-slot configuration ─────────────────────
+        // When set, maxParticipants is auto-derived via the pre-validate hook.
+        // Optional for backward compatibility with existing tournaments.
+        matchType: {
+            type: String,
+            enum: [...VALID_MATCH_TYPES],
+            default: null,
         },
         startDate: {
             type: Date,
@@ -260,5 +269,16 @@ tournamentSchema.methods.addParticipant = function (userId) {
     this.participants.push({ userId });
     return this.save();
 };
+
+// ── Pre-validate hook: auto-set maxParticipants from matchType ────────────────
+// When matchType is provided, the slot count is derived from the constants table.
+// This ensures the backend is ALWAYS the authority — even if the frontend sends
+// a conflicting maxParticipants value, it gets overridden here.
+// NOTE: Mongoose 9 uses promise-based middleware — no `next` callback.
+tournamentSchema.pre('validate', function () {
+    if (this.matchType && MATCH_TYPE_SLOTS[this.matchType] !== undefined) {
+        this.maxParticipants = MATCH_TYPE_SLOTS[this.matchType];
+    }
+});
 
 module.exports = mongoose.model('Tournament', tournamentSchema);

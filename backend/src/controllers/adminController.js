@@ -13,6 +13,7 @@ const {
 } = require('../services/withdrawalService');
 const { notifyTournamentLive } = require('../config/email');
 const { invalidateRoomCredentials } = require('../services/cacheService');
+const { VALID_MATCH_TYPES, MATCH_TYPE_SLOTS } = require('../utils/matchTypes');
 
 // @desc    Get analytics overview
 // @route   GET /api/admin/analytics/overview
@@ -392,7 +393,21 @@ const computeStatus = ({ startDate, endDate, status }) => {
 // @route   POST /api/admin/tournaments
 // @access  Private/Admin
 const createTournament = asyncHandler(async (req, res) => {
-    const { startDate, endDate } = req.body;
+    const { startDate, endDate, matchType } = req.body;
+
+    // ── matchType validation ──────────────────────────────────────────────────
+    if (matchType && !VALID_MATCH_TYPES.includes(matchType)) {
+        throw new ApiError(
+            `Invalid matchType "${matchType}". Valid values: ${VALID_MATCH_TYPES.join(', ')}`,
+            400
+        );
+    }
+
+    // When matchType is set, log auto-derived maxParticipants for admin clarity
+    if (matchType && MATCH_TYPE_SLOTS[matchType] !== undefined) {
+        logger.info(`matchType "${matchType}" selected — maxParticipants auto-set to ${MATCH_TYPE_SLOTS[matchType]}`);
+    }
+
     const derivedStatus = computeStatus({
         startDate,
         endDate,
@@ -407,7 +422,7 @@ const createTournament = asyncHandler(async (req, res) => {
 
     const tournament = await Tournament.create(tournamentData);
 
-    logger.info(`Admin ${req.user.email} created tournament: ${tournament.title} [status=${derivedStatus}]`);
+    logger.info(`Admin ${req.user.email} created tournament: ${tournament.title} [status=${derivedStatus}, matchType=${matchType || 'none'}]`);
 
     res.status(201).json({
         success: true,
@@ -433,6 +448,22 @@ const updateTournament = asyncHandler(async (req, res) => {
             tournament[key] = req.body[key];
         }
     });
+
+    // ── Guard: cannot change matchType when active participants exist ──────────
+    if (
+        req.body.matchType !== undefined &&
+        req.body.matchType !== tournament.matchType
+    ) {
+        const activeCount = tournament.participants.filter(
+            (p) => p.status === 'registered' || p.status === 'confirmed'
+        ).length;
+        if (activeCount > 0) {
+            throw new ApiError(
+                `Cannot change matchType when ${activeCount} participant(s) are registered. Cancel registrations first.`,
+                409
+            );
+        }
+    }
 
     // Re-derive status from updated dates (honours admin overrides for cancelled/draft)
     tournament.status = computeStatus({

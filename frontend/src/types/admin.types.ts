@@ -1,5 +1,7 @@
 // Admin-specific type definitions
 
+export type MatchType = 'TDM' | 'Battle Royale - Solo' | 'Battle Royale - Squad';
+
 export interface Analytics {
     totalUsers: number;
     totalTournaments: number;
@@ -66,6 +68,7 @@ export interface Tournament {
     updatedAt: string;
     participantCount?: number;
     availableSlots?: number;
+    matchType?: MatchType | null;
 }
 
 export interface TournamentParticipant {
@@ -146,6 +149,7 @@ export interface CreateTournamentRequest {
     rules?: string;
     status?: string;
     bannerImage?: string;
+    matchType?: string;
 }
 
 export interface UpdateTournamentRequest extends Partial<CreateTournamentRequest> { }

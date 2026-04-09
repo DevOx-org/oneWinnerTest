@@ -39,7 +39,7 @@ const logger = require('../config/logger');
  *
  * @param {string|ObjectId} userId
  * @param {string|ObjectId} tournamentId
- * @returns {Promise<{tournament, walletBalance, transactionId, matchCount}>}
+ * @returns {Promise<{tournament, walletBalance, transactionId, assignedSlot, matchCount}>}}
  */
 async function registerWithWallet(userId, tournamentId, teamData = {}) {
     const session = await mongoose.startSession();
@@ -225,8 +225,8 @@ async function registerWithWallet(userId, tournamentId, teamData = {}) {
                 status: 'confirmed',
                 registeredAt: now,
                 paymentId: walletResult.transaction?._id || null,
-                // Team registration data (optional, all validated by schema)
-                ...(teamData.assignedSlot && { assignedSlot: teamData.assignedSlot }),
+                // assignedSlot is computed AFTER atomic insert (Step 8b)
+                // — the backend owns sequential slot assignment, frontend value is ignored
                 ...(teamData.teamLeaderName && { teamLeaderName: teamData.teamLeaderName }),
                 ...(teamData.leaderGameName && { leaderGameName: teamData.leaderGameName }),
                 ...(teamData.teamMember2 && { teamMember2: teamData.teamMember2 }),
@@ -309,6 +309,42 @@ async function registerWithWallet(userId, tournamentId, teamData = {}) {
                 walletBalanceAfter: walletResult.balance,
             });
 
+            // ── Step 8b: Compute and set sequential slot ─────────────────────
+            // Slot number = (total non-cancelled participants at time of insert).
+            // We use the returned document from findOneAndUpdate (which includes
+            // our newly-pushed participant) to derive the slot.
+            //
+            // Ordering: participants are pushed in order, so array index reflects
+            // registration sequence. We count only non-cancelled entries so that
+            // cancelled registrations do NOT create gaps in the slot sequence.
+            // Slots are never recycled — a cancelled slot stays empty.
+            const allParticipants = updated.participants;
+            const nonCancelledParticipants = allParticipants.filter(
+                (p) => p.status !== 'cancelled'
+            );
+            // Our entry is the last non-cancelled one pushed
+            const myEntry = nonCancelledParticipants.find(
+                (p) =>
+                    p.userId.toString() === userId.toString() &&
+                    (p.status === 'registered' || p.status === 'confirmed')
+            );
+            const sequentialSlot = myEntry
+                ? nonCancelledParticipants.indexOf(myEntry) + 1
+                : nonCancelledParticipants.length;
+
+            // Atomic set on the specific participant sub-document
+            await Tournament.updateOne(
+                { _id: tournamentId, 'participants._id': myEntry._id },
+                { $set: { 'participants.$.assignedSlot': sequentialSlot } },
+                { session }
+            );
+
+            logger.info('Sequential slot assigned', {
+                userId: userId.toString(),
+                tournamentId: tournamentId.toString(),
+                assignedSlot: sequentialSlot,
+            });
+
             result = {
                 tournament: {
                     id: tournament._id.toString(),
@@ -319,6 +355,7 @@ async function registerWithWallet(userId, tournamentId, teamData = {}) {
                 },
                 walletBalance: walletResult.balance,
                 transactionId: walletResult.transaction?._id?.toString() || null,
+                assignedSlot: sequentialSlot,
             };
         });
 

@@ -5,7 +5,6 @@ interface ConfirmRegistrationModalProps {
     entryFee: number;
     walletBalance: number;
     tournamentTitle: string;
-    slot: number;
     onConfirm: () => void;
     onCancel: () => void;
     isProcessing: boolean;
@@ -16,7 +15,6 @@ const ConfirmRegistrationModal: React.FC<ConfirmRegistrationModalProps> = ({
     entryFee,
     walletBalance,
     tournamentTitle,
-    slot,
     onConfirm,
     onCancel,
     isProcessing,
@@ -98,7 +96,7 @@ const ConfirmRegistrationModal: React.FC<ConfirmRegistrationModalProps> = ({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span className="text-gray-400 text-xs">
-                            You will be assigned to <strong className="text-white">Slot-{slot}</strong>. This action cannot be undone.
+                            Your slot will be assigned automatically upon confirmation. This action cannot be undone.
                         </span>
                     </div>
 

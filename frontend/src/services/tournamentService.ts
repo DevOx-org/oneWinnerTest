@@ -58,6 +58,8 @@ export interface TournamentRegistrationResponse {
             entryFee: number;
         };
         transactionId: string | null;
+        /** Sequential slot number assigned by the backend */
+        assignedSlot: number;
     };
     walletBalance: number;
     matchCount: number;
@@ -120,7 +122,6 @@ export const getTournamentById = async (id: string): Promise<TournamentDetailRes
  * Team data collected during registration.
  */
 export interface TeamRegistrationData {
-    assignedSlot?: number;
     teamLeaderName?: string;
     leaderGameName?: string;
     teamMember2?: string;

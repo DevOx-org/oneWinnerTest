@@ -8,6 +8,7 @@ interface Tournament {
     description: string;
     game: string;
     platform: string;
+    matchType?: string | null;
     startDate: string;
     endDate: string;
     registrationDeadline: string;
@@ -40,6 +41,7 @@ interface TournamentFormData {
     description: string;
     game: string;
     platform: string;
+    matchType: string;
     // Start date/time (split for cleaner UX)
     startDateOnly: string;   // YYYY-MM-DD
     startHour: string;       // '01'..'12'
@@ -58,6 +60,11 @@ interface TournamentFormData {
 
 const GAMES = ['PUBG Mobile', 'Free Fire', 'Call of Duty Mobile', 'Valorant', 'CS:GO', 'Other'];
 const PLATFORMS = ['Mobile', 'PC', 'Console', 'Cross-Platform'];
+const MATCH_TYPES = [
+    { value: 'TDM', label: 'TDM', slots: 2 },
+    { value: 'Battle Royale - Solo', label: 'Battle Royale - Solo', slots: 48 },
+    { value: 'Battle Royale - Squad', label: 'Battle Royale - Squad', slots: 12 },
+];
 
 const TournamentManagement: React.FC = () => {
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -104,6 +111,7 @@ const TournamentManagement: React.FC = () => {
         description: '',
         game: '',
         platform: '',
+        matchType: '',
         startDateOnly: '',
         startHour: '08',
         startMinute: '00',
@@ -214,6 +222,7 @@ const TournamentManagement: React.FC = () => {
 
         if (!formData.game) errors.game = 'Game is required';
         if (!formData.platform) errors.platform = 'Platform is required';
+        if (!formData.matchType) errors.matchType = 'Match type is required';
 
         if (!formData.startDateOnly) errors.startDateOnly = 'Start date is required';
         if (!formData.endDateOnly) errors.endDateOnly = 'End date is required';
@@ -428,6 +437,7 @@ const TournamentManagement: React.FC = () => {
             description: tournament.description,
             game: tournament.game,
             platform: tournament.platform,
+            matchType: tournament.matchType || '',
             startDateOnly: start.dateOnly,
             startHour: start.hour,
             startMinute: start.minute,
@@ -838,19 +848,52 @@ const TournamentManagement: React.FC = () => {
                                     <p className="text-gray-500 text-xs mt-1">Registration closes automatically 1 hour before start time.</p>
                                 </div>
 
+                                {/* Match Type */}
+                                <div>
+                                    <label className="text-gray-300 text-sm font-semibold mb-2 block">Match Type *</label>
+                                    <select
+                                        value={formData.matchType}
+                                        onChange={(e) => {
+                                            const mt = MATCH_TYPES.find(m => m.value === e.target.value);
+                                            setFormData({
+                                                ...formData,
+                                                matchType: e.target.value,
+                                                maxParticipants: mt ? mt.slots : formData.maxParticipants,
+                                            });
+                                        }}
+                                        className={`w-full bg-dark-700/80 text-white px-4 py-3 rounded-lg border ${formErrors.matchType ? 'border-red-500' : 'border-white/10'} focus:border-orange-500 focus:outline-none`}
+                                    >
+                                        <option value="">Select match type</option>
+                                        {MATCH_TYPES.map(mt => (
+                                            <option key={mt.value} value={mt.value}>{mt.label} ({mt.slots} slots)</option>
+                                        ))}
+                                    </select>
+                                    {formErrors.matchType && <p className="text-red-400 text-xs mt-1">{formErrors.matchType}</p>}
+                                </div>
+
                                 {/* Max Participants */}
                                 <div>
                                     <label className="text-gray-300 text-sm font-semibold mb-2 block">Max Participants *</label>
                                     <input
                                         type="number"
                                         value={formData.maxParticipants}
-                                        onChange={(e) => setFormData({ ...formData, maxParticipants: e.target.value === '' ? 0 : Number(e.target.value) })}
-                                        className={`w-full bg-dark-700/80 text-white px-4 py-3 rounded-lg border ${formErrors.maxParticipants ? 'border-red-500' : 'border-white/10'} focus:border-orange-500 focus:outline-none`}
+                                        onChange={(e) => {
+                                            if (!formData.matchType) {
+                                                setFormData({ ...formData, maxParticipants: e.target.value === '' ? 0 : Number(e.target.value) });
+                                            }
+                                        }}
+                                        readOnly={!!formData.matchType}
+                                        className={`w-full bg-dark-700/80 text-white px-4 py-3 rounded-lg border ${formErrors.maxParticipants ? 'border-red-500' : 'border-white/10'} focus:border-orange-500 focus:outline-none ${formData.matchType ? 'opacity-60 cursor-not-allowed' : ''}`}
                                         min="2"
                                         max="1000"
                                         step="1"
                                     />
                                     {formErrors.maxParticipants && <p className="text-red-400 text-xs mt-1">{formErrors.maxParticipants}</p>}
+                                    {formData.matchType && (
+                                        <p className="text-yellow-400 text-xs mt-1">
+                                            Auto-set by match type: {formData.matchType}
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Entry Fee */}

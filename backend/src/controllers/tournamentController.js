@@ -47,7 +47,7 @@ exports.getPublicTournaments = asyncHandler(async (req, res) => {
             .sort({ startDate: 1 })
             .skip(skip)
             .limit(parsedLimit)
-            .select('-isDeleted -__v -roomId -roomPassword -rules -prizeDistribution -updatedBy')
+            .select('-isDeleted -__v -roomId -roomPassword -rules -prizeDistribution -updatedBy -matchType')
             .select({ 'participants.userId': 1, 'participants.status': 1 }) // tight projection
             .lean(),
         Tournament.countDocuments(filter),
@@ -194,8 +194,9 @@ exports.registerForTournament = asyncHandler(async (req, res) => {
     const userId = req.user.id;
 
     // Team registration data from request body (all optional, validated by schema)
+    // NOTE: assignedSlot is NO LONGER accepted from the client — the backend
+    // computes sequential slots atomically in the registration service.
     const teamData = {
-        assignedSlot: req.body.assignedSlot || null,
         teamLeaderName: req.body.teamLeaderName || null,
         leaderGameName: req.body.leaderGameName || null,
         teamMember2: req.body.teamMember2 || null,
@@ -226,6 +227,7 @@ exports.registerForTournament = asyncHandler(async (req, res) => {
         registration: {
             tournament: result.tournament,
             transactionId: result.transactionId,
+            assignedSlot: result.assignedSlot,
         },
         walletBalance: result.walletBalance,
         matchCount: result.matchCount,
