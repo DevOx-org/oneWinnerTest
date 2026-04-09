@@ -12,6 +12,7 @@ const {
     getAdminWithdrawals,
 } = require('../services/withdrawalService');
 const { notifyTournamentLive } = require('../config/email');
+const { invalidateRoomCredentials } = require('../services/cacheService');
 
 // @desc    Get analytics overview
 // @route   GET /api/admin/analytics/overview
@@ -521,6 +522,9 @@ const setRoomCredentials = asyncHandler(async (req, res) => {
     tournament.roomPassword = roomPassword.trim();
     tournament.updatedBy = req.user.id;
     await tournament.save();
+
+    // Invalidate Redis cache so participants fetch fresh credentials
+    await invalidateRoomCredentials(tournament._id.toString());
 
     // --- Audit log: roomId is logged, roomPassword is NEVER logged ---
     logger.info(`Room credentials ${isUpdate ? 'updated' : 'set'} by admin`, {

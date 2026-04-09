@@ -2,6 +2,7 @@ const Tournament = require('../models/Tournament');
 const asyncHandler = require('../utils/asyncHandler');
 const ApiError = require('../utils/ApiError');
 const { registerWithWallet } = require('../services/tournamentRegistrationService');
+const { getRoomCredentialsCached, setRoomCredentialsCached } = require('../services/cacheService');
 const logger = require('../config/logger');
 
 /**
@@ -328,12 +329,31 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
         });
     }
 
-    // 4. Window open — explicitly fetch credentials (select:false fields)
-    const tournamentWithCreds = await Tournament.findById(tournamentId)
-        .select('+roomId +roomPassword');
+    // 4. Window open — try Redis cache first, then fallback to DB
+    let roomId = null;
+    let roomPassword = null;
+
+    // Check cache (serves 100 concurrent users from 1 DB query)
+    const cached = await getRoomCredentialsCached(tournamentId);
+    if (cached) {
+        roomId = cached.roomId;
+        roomPassword = cached.roomPassword;
+    } else {
+        // Cache miss — fetch from DB and populate cache for subsequent requests
+        const tournamentWithCreds = await Tournament.findById(tournamentId)
+            .select('+roomId +roomPassword');
+
+        if (tournamentWithCreds.roomId) {
+            roomId = tournamentWithCreds.roomId;
+            roomPassword = tournamentWithCreds.roomPassword;
+
+            // Cache for next burst of requests
+            await setRoomCredentialsCached(tournamentId, { roomId, roomPassword });
+        }
+    }
 
     // Safety net: admin has not set credentials yet
-    if (!tournamentWithCreds.roomId) {
+    if (!roomId) {
         logger.warn('Room details window open but credentials not set by admin', {
             tournamentId,
             requestId: req.id,
@@ -349,8 +369,8 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
     return res.status(200).json({
         success: true,
         roomVisible: true,
-        roomId: tournamentWithCreds.roomId,
-        roomPassword: tournamentWithCreds.roomPassword,
+        roomId,
+        roomPassword,
         releaseTime: releaseTime.toISOString(),
     });
 });
