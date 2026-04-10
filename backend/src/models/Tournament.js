@@ -161,6 +161,7 @@ const tournamentSchema = new mongoose.Schema(
                 refunded: { type: Boolean, default: false },
                 // Winnings metadata — populated when winnings are distributed
                 winningAmount: { type: Number, default: 0 },
+                totalKills: { type: Number, min: 0, default: 0 },
                 winsDistributedAt: { type: Date, default: null },
             },
         ],

@@ -588,7 +588,7 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
         _id: req.params.id,
         isDeleted: false,
     })
-        .select('title game entryFee maxParticipants participants status')
+        .select('title game entryFee maxParticipants participants status matchType')
         .populate({
             path: 'participants.userId',
             select: '_id name email',
@@ -614,6 +614,7 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
         // Registration details (filled during tournament signup)
         rank: p.rank ?? null,
         winningAmount: p.winningAmount ?? 0,
+        totalKills: p.totalKills ?? 0,
         winsDistributedAt: p.winsDistributedAt ?? null,
         teamLeaderName: p.teamLeaderName || null,
         leaderGameName: p.leaderGameName || null,
@@ -647,6 +648,7 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
             status: tournament.status,
             entryFee: tournament.entryFee,
             maxParticipants: tournament.maxParticipants,
+            matchType: tournament.matchType || null,
         },
         participants,
         total: participants.length,
@@ -1015,10 +1017,23 @@ const getPendingSettlementsHandler = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const setParticipantRank = asyncHandler(async (req, res) => {
     const { id: tournamentId, userId } = req.params;
-    const { rank } = req.body;
+    const { rank, totalKills } = req.body;
 
     if (!rank || typeof rank !== 'number' || rank < 1 || !Number.isInteger(rank)) {
         throw new ApiError('rank must be a positive integer', 400);
+    }
+
+    // Build $set payload — always includes rank; totalKills is optional
+    const setFields = {
+        'participants.$.rank': rank,
+        'participants.$.status': 'confirmed', // ensure confirmed status
+    };
+    if (totalKills !== undefined && totalKills !== null) {
+        const kills = parseInt(totalKills);
+        if (isNaN(kills) || kills < 0) {
+            throw new ApiError('totalKills must be a non-negative integer', 400);
+        }
+        setFields['participants.$.totalKills'] = kills;
     }
 
     const updated = await Tournament.findOneAndUpdate(
@@ -1028,12 +1043,7 @@ const setParticipantRank = asyncHandler(async (req, res) => {
             winningsDistributed: false,              // cannot re-rank after distribution
             'participants.userId': mongoose.Types.ObjectId.createFromHexString(userId),
         },
-        {
-            $set: {
-                'participants.$.rank': rank,
-                'participants.$.status': 'confirmed', // ensure confirmed status
-            },
-        },
+        { $set: setFields },
         { new: true }
     );
 
@@ -1053,6 +1063,7 @@ const setParticipantRank = asyncHandler(async (req, res) => {
         participant: {
             userId: participant.userId,
             rank: participant.rank,
+            totalKills: participant.totalKills ?? 0,
             status: participant.status,
         },
     });

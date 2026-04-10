@@ -299,15 +299,19 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
     }
 
     // Active participant: registered or confirmed only — banned users denied access
-    const isParticipant = tournamentCheck.participants.some(
+    const myParticipant = tournamentCheck.participants.find(
         (p) =>
             p.userId.toString() === userId.toString() &&
             (p.status === 'registered' || p.status === 'confirmed')
     );
 
-    if (!isParticipant) {
+    if (!myParticipant) {
         throw new ApiError('Access denied. You are not registered in this tournament.', 403);
     }
+
+    // Extract slot + match time for the response
+    const assignedSlot = myParticipant.assignedSlot || null;
+    const matchTime = tournamentCheck.startDate ? new Date(tournamentCheck.startDate).toISOString() : null;
 
     // 2. Compute release time: startDate - 30 minutes (all UTC, no client trust)
     const startDate = new Date(tournamentCheck.startDate);
@@ -328,6 +332,8 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
             success: true,
             roomVisible: false,
             releaseTime: releaseTime.toISOString(),
+            assignedSlot,
+            matchTime,
         });
     }
 
@@ -364,6 +370,8 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
             success: true,
             roomVisible: false,
             releaseTime: releaseTime.toISOString(),
+            assignedSlot,
+            matchTime,
             message: 'Credentials not yet available. Please check back shortly.',
         });
     }
@@ -374,5 +382,7 @@ exports.getRoomDetails = asyncHandler(async (req, res) => {
         roomId,
         roomPassword,
         releaseTime: releaseTime.toISOString(),
+        assignedSlot,
+        matchTime,
     });
 });

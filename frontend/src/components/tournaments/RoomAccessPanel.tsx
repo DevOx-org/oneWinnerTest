@@ -71,15 +71,31 @@ const RoomAccessPanel: React.FC<RoomAccessPanelProps> = ({ tournamentId, onFlipB
 
     // Use a ref for the interval so we can clear it cleanly
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Guard against concurrent fetches (dedup 429 avoidance)
+    const fetchingRef = useRef(false);
 
     const fetchRoomDetails = useCallback(async () => {
+        // Skip if a fetch is already in-flight
+        if (fetchingRef.current) return;
+        fetchingRef.current = true;
         try {
             setError(null);
             const data = await getRoomDetails(tournamentId);
             setRoomData(data);
         } catch (err: any) {
+            const status = err.response?.status;
+            // 429 = dedup guard — silently retry after the lockout window
+            if (status === 429) {
+                const retryAfter = (err.response?.data?.retryAfter || 2) * 1000;
+                setTimeout(() => {
+                    fetchingRef.current = false;
+                    fetchRoomDetails();
+                }, retryAfter);
+                return; // don't show error to user
+            }
             setError(err.response?.data?.message || 'Failed to load room details.');
         } finally {
+            fetchingRef.current = false;
             setLoading(false);
         }
     }, [tournamentId]);
@@ -182,6 +198,36 @@ const RoomAccessPanel: React.FC<RoomAccessPanelProps> = ({ tournamentId, onFlipB
                             </div>
                         </div>
 
+                        {/* Match Schedule */}
+                        {(roomData.assignedSlot || roomData.matchTime) && (
+                            <div className="bg-primary-orange/10 border border-primary-orange/25 rounded-xl p-4 flex items-center gap-3">
+                                <div className="flex-shrink-0 w-9 h-9 rounded-full bg-primary-orange/20 flex items-center justify-center">
+                                    <svg className="w-4.5 h-4.5 text-primary-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    {roomData.assignedSlot && (
+                                        <p className="text-primary-orange text-xs font-bold tracking-wide">
+                                            Slot-{roomData.assignedSlot}
+                                        </p>
+                                    )}
+                                    {roomData.matchTime && (
+                                        <p className="text-white/80 text-xs mt-0.5">
+                                            {new Date(roomData.matchTime).toLocaleString(undefined, {
+                                                weekday: 'short',
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Room ID */}
                         <div className="bg-dark-700/60 border border-white/10 rounded-xl p-4">
                             <p className="text-gray-400 text-xs mb-2 font-medium">Room ID</p>
@@ -240,6 +286,36 @@ const RoomAccessPanel: React.FC<RoomAccessPanelProps> = ({ tournamentId, onFlipB
                                 ))}
                             </div>
                         </div>
+
+                        {/* Match Schedule (visible even before credentials release) */}
+                        {(roomData?.assignedSlot || roomData?.matchTime) && (
+                            <div className="bg-primary-orange/10 border border-primary-orange/25 rounded-xl p-3.5 mx-2 flex items-center gap-3 text-left">
+                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-orange/20 flex items-center justify-center">
+                                    <svg className="w-4 h-4 text-primary-orange" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    {roomData.assignedSlot && (
+                                        <p className="text-primary-orange text-xs font-bold tracking-wide">
+                                            Slot-{roomData.assignedSlot}
+                                        </p>
+                                    )}
+                                    {roomData.matchTime && (
+                                        <p className="text-white/80 text-xs mt-0.5">
+                                            {new Date(roomData.matchTime).toLocaleString(undefined, {
+                                                weekday: 'short',
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit',
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="bg-dark-700/40 border border-white/5 rounded-xl p-4 mx-2">
                             <p className="text-gray-400 text-xs leading-relaxed">

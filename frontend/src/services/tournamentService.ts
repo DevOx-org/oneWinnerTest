@@ -80,6 +80,10 @@ export interface RoomDetailsResponse {
     roomPassword?: string;
     /** Set when window has opened but admin hasn't provided credentials yet */
     message?: string;
+    /** User's sequential slot number (e.g. 1, 2, 3…) */
+    assignedSlot?: number | null;
+    /** ISO-8601 UTC — the tournament's match start time */
+    matchTime?: string | null;
 }
 
 /**

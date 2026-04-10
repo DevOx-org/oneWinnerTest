@@ -248,7 +248,7 @@ async function getPendingSettlements(page = 1, limit = 20) {
 
     const [settlements, total] = await Promise.all([
         Tournament.find(query)
-            .select('title game startDate endDate prizePool prizeDistribution status participants winningsDistributed distributedAt')
+            .select('title game startDate endDate prizePool prizeDistribution status participants winningsDistributed distributedAt matchType')
             .sort({ endDate: 1 })         // oldest pending first
             .skip(skip)
             .limit(parseInt(limit))
@@ -286,6 +286,7 @@ async function getPendingSettlements(page = 1, limit = 20) {
             rankedCount,
             readyToDistribute: rankedCount > 0,
             winningsDistributed: t.winningsDistributed,
+            matchType: t.matchType || null,
         };
     });
 
@@ -483,6 +484,7 @@ async function getSettlementHistoryById(tournamentId) {
         teamMember3: p.teamMember3 || null,
         teamMember4: p.teamMember4 || null,
         assignedSlot: p.assignedSlot || null,
+        totalKills: p.totalKills || 0,
     }));
 
     const totalDistributed = enrichedParticipants.reduce((sum, p) => sum + p.winningAmount, 0);
