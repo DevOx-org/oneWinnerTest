@@ -34,7 +34,7 @@ const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
 const { sendWithdrawalApprovedEmail, sendWithdrawalRejectedEmail } = require('../config/email');
 
-const MIN_WITHDRAWAL = parseInt(process.env.WALLET_MIN_WITHDRAWAL || '100');
+const MIN_WITHDRAWAL = parseInt(process.env.WALLET_MIN_WITHDRAWAL || '50');
 const MAX_WITHDRAWAL = parseInt(process.env.WALLET_MAX_WITHDRAWAL || '100000');
 // UPI ID format: username@provider (e.g. user@paytm, 9999999999@ybl)
 const UPI_REGEX = /^[\w.\-]+@[\w]+$/;

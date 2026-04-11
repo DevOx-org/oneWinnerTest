@@ -221,8 +221,8 @@ const DashboardPage: React.FC = () => {
         setWithdrawError(null);
         setWithdrawSuccess(null);
         const amount = parseFloat(withdrawAmount);
-        if (!withdrawAmount || isNaN(amount) || amount < 100) {
-            setWithdrawError('Minimum withdrawal is ₹100');
+        if (!withdrawAmount || isNaN(amount) || amount < 50) {
+            setWithdrawError('Minimum withdrawal is ₹50');
             return;
         }
         if (amount > winningBalance) {
@@ -1352,8 +1352,8 @@ const DashboardPage: React.FC = () => {
                                                 <label className="text-gray-500 text-[10px] uppercase tracking-wider font-semibold mb-2 block">Amount (₹)</label>
                                                 <input
                                                     type="number"
-                                                    min="100"
-                                                    placeholder="Min ₹100"
+                                                    min="50"
+                                                    placeholder="Min ₹50"
                                                     value={withdrawAmount}
                                                     onChange={(e) => { setWithdrawAmount(e.target.value); setWithdrawError(null); }}
                                                     className="w-full text-white px-4 py-3 rounded-lg focus:outline-none transition-all text-sm"
@@ -1364,7 +1364,7 @@ const DashboardPage: React.FC = () => {
                                                     onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(255,140,0,0.4)'; }}
                                                     onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
                                                 />
-                                                <p className="text-gray-600 text-xs mt-1">Withdrawable Earnings: ₹{(winningBalance ?? 0).toLocaleString()} • Min: ₹100</p>
+                                                <p className="text-gray-600 text-xs mt-1">Withdrawable Earnings: ₹{(winningBalance ?? 0).toLocaleString()} • Min: ₹50</p>
                                             </div>
 
                                             {/* Quick Amount Buttons */}

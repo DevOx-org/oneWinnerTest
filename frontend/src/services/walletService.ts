@@ -138,7 +138,7 @@ export const getTransactionHistory = async (
 
 /**
  * Submit a withdrawal request. Holds the amount from the wallet immediately.
- * Min ₹100.
+ * Min ₹50.
  */
 export const requestWithdrawal = async (
     amount: number,

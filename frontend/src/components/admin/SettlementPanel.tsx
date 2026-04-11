@@ -241,11 +241,8 @@ export default function SettlementPanel() {
             return;
         }
 
-        // For BR Solo: must have either rank or kills
-        if (isBRSoloMode && !rank && (!totalKills || totalKills <= 0)) {
-            showToast('error', 'Set at least kills or rank for this player');
-            return;
-        }
+        // For BR Solo: both kills and rank are optional
+        // A player may have rank 1/2/3 with 0 kills, or no rank with 0 kills (₹0 settlement)
 
         // ── Parse calculatedAmount (admin override) ──────────────────────────
         const calcAmtStr = calcAmountInputs[userId];
