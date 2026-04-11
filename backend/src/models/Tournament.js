@@ -85,6 +85,19 @@ const tournamentSchema = new mongoose.Schema(
                 ['3rd', 20],
             ]),
         },
+        // ── BR Solo settlement config ─────────────────────────────────────────
+        // perKillAmount: fixed ₹ per kill (e.g. 8 → 5 kills = ₹40)
+        // rankDistribution: fixed ₹ per rank position (key="1"/"2"/"3", value=amount)
+        perKillAmount: {
+            type: Number,
+            min: 0,
+            default: 0,
+        },
+        rankDistribution: {
+            type: Map,
+            of: Number,
+            default: null,
+        },
         rules: {
             type: String,
             trim: true,
@@ -139,6 +152,13 @@ const tournamentSchema = new mongoose.Schema(
                     trim: true,
                     maxlength: 100,
                 },
+                // Plain-text searchable game name (e.g. "piyush" for stylized "ℙꪱʏůℋ𐍃")
+                // Used by admins in settlement search to find players by readable name
+                playerGameName: {
+                    type: String,
+                    trim: true,
+                    maxlength: 100,
+                },
                 teamMember2: {
                     type: String,
                     trim: true,
@@ -161,6 +181,9 @@ const tournamentSchema = new mongoose.Schema(
                 refunded: { type: Boolean, default: false },
                 // Winnings metadata — populated when winnings are distributed
                 winningAmount: { type: Number, default: 0 },
+                // calculatedAmount: pre-distribution saved amount (kills*perKill + rankAmount)
+                // Saved by admin during settlement, used during distribution for BR Solo
+                calculatedAmount: { type: Number, default: 0 },
                 totalKills: { type: Number, min: 0, default: 0 },
                 winsDistributedAt: { type: Date, default: null },
             },
@@ -200,6 +223,11 @@ const tournamentSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',
             default: null,
+        },
+        // When true, tournament is only visible to admins — hidden from regular users
+        isTestMode: {
+            type: Boolean,
+            default: false,
         },
         isDeleted: {
             type: Boolean,

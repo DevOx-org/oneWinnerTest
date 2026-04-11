@@ -90,6 +90,7 @@ const TournamentsPage: React.FC = () => {
             canJoin: backend.canJoin,
             tournamentState: backend.tournamentState,
             registrationOpen: backend.registrationOpen,
+            matchType: (backend as any).matchType || undefined,
         };
     };
 

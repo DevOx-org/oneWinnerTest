@@ -21,6 +21,7 @@ interface Tournament {
     createdBy: any;
     createdAt: string;
     updatedAt: string;
+    isTestMode?: boolean;
 }
 
 interface ParticipantRow {
@@ -56,6 +57,7 @@ interface TournamentFormData {
     entryFee: number;
     prizePool: number;
     rules: string;
+    isTestMode: boolean;
 }
 
 const GAMES = ['PUBG Mobile', 'Free Fire', 'Call of Duty Mobile', 'Valorant', 'CS:GO', 'Other'];
@@ -65,6 +67,14 @@ const MATCH_TYPES = [
     { value: 'Battle Royale - Solo', label: 'Battle Royale - Solo', slots: 48 },
     { value: 'Battle Royale - Squad', label: 'Battle Royale - Squad', slots: 12 },
 ];
+
+// ── BR Solo defaults (auto-fill on match type selection) ──────────────────────
+const SOLO_DEFAULTS = Object.freeze({
+    prizePool: 420,
+    entryFee: 20,
+    perKillAmount: 8,
+    rankDistribution: { '1': 80, '2': 60, '3': 40 },
+});
 
 const TournamentManagement: React.FC = () => {
     const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -124,6 +134,7 @@ const TournamentManagement: React.FC = () => {
         entryFee: 0,
         prizePool: 0,
         rules: '',
+        isTestMode: false,
     };
     const [formData, setFormData] = useState<TournamentFormData>(EMPTY_FORM);
 
@@ -258,11 +269,13 @@ const TournamentManagement: React.FC = () => {
             // Send ONLY clean data to backend — strip the split UI fields
             const { startDateOnly, startHour, startMinute, startAmPm,
                     endDateOnly, endHour, endMinute, endAmPm, ...rest } = formData;
+            const isSolo = rest.matchType === 'Battle Royale - Solo';
             await api.post(`admin/tournaments`, {
                 ...rest,
                 startDate,
                 endDate,
                 registrationDeadline,
+                ...(isSolo ? { perKillAmount: SOLO_DEFAULTS.perKillAmount, rankDistribution: SOLO_DEFAULTS.rankDistribution } : {}),
             }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -292,11 +305,13 @@ const TournamentManagement: React.FC = () => {
             // Send ONLY clean data to backend — strip the split UI fields
             const { startDateOnly, startHour, startMinute, startAmPm,
                     endDateOnly, endHour, endMinute, endAmPm, ...rest } = formData;
+            const isSolo = rest.matchType === 'Battle Royale - Solo';
             await api.put(`admin/tournaments/${selectedTournament._id}`, {
                 ...rest,
                 startDate,
                 endDate,
                 registrationDeadline,
+                ...(isSolo ? { perKillAmount: SOLO_DEFAULTS.perKillAmount, rankDistribution: SOLO_DEFAULTS.rankDistribution } : {}),
             }, {
                 headers: { Authorization: `Bearer ${token}` },
             });
@@ -450,6 +465,7 @@ const TournamentManagement: React.FC = () => {
             entryFee: tournament.entryFee,
             prizePool: tournament.prizePool,
             rules: tournament.rules || '',
+            isTestMode: tournament.isTestMode ?? false,
         });
         setShowEditModal(true);
     };
@@ -584,7 +600,14 @@ const TournamentManagement: React.FC = () => {
                                     filteredTournaments.map((tournament) => (
                                         <tr key={tournament._id} className="hover:bg-dark-700/30 transition-colors">
                                             <td className="px-6 py-4">
-                                                <div className="text-white font-medium">{tournament.title}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-white font-medium">{tournament.title}</span>
+                                                    {tournament.isTestMode && (
+                                                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 uppercase tracking-wider">
+                                                            Test
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 text-gray-300">{tournament.game}</td>
                                             <td className="px-6 py-4 text-gray-300">{tournament.platform}</td>
@@ -855,10 +878,12 @@ const TournamentManagement: React.FC = () => {
                                         value={formData.matchType}
                                         onChange={(e) => {
                                             const mt = MATCH_TYPES.find(m => m.value === e.target.value);
+                                            const isSolo = e.target.value === 'Battle Royale - Solo';
                                             setFormData({
                                                 ...formData,
                                                 matchType: e.target.value,
                                                 maxParticipants: mt ? mt.slots : formData.maxParticipants,
+                                                ...(isSolo ? { prizePool: SOLO_DEFAULTS.prizePool, entryFee: SOLO_DEFAULTS.entryFee } : {}),
                                             });
                                         }}
                                         className={`w-full bg-dark-700/80 text-white px-4 py-3 rounded-lg border ${formErrors.matchType ? 'border-red-500' : 'border-white/10'} focus:border-orange-500 focus:outline-none`}
@@ -869,6 +894,38 @@ const TournamentManagement: React.FC = () => {
                                         ))}
                                     </select>
                                     {formErrors.matchType && <p className="text-red-400 text-xs mt-1">{formErrors.matchType}</p>}
+                                </div>
+
+                                {/* Testing / Live Toggle */}
+                                <div>
+                                    <label className="text-gray-300 text-sm font-semibold mb-2 block">Mode</label>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, isTestMode: false })}
+                                            className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all border ${
+                                                !formData.isTestMode
+                                                    ? 'bg-green-600/20 border-green-500 text-green-400'
+                                                    : 'bg-dark-700/80 border-white/10 text-gray-400 hover:border-white/20'
+                                            }`}
+                                        >
+                                            🟢 Live
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setFormData({ ...formData, isTestMode: true })}
+                                            className={`flex-1 px-4 py-3 rounded-lg text-sm font-semibold transition-all border ${
+                                                formData.isTestMode
+                                                    ? 'bg-yellow-600/20 border-yellow-500 text-yellow-400'
+                                                    : 'bg-dark-700/80 border-white/10 text-gray-400 hover:border-white/20'
+                                            }`}
+                                        >
+                                            🧪 Testing
+                                        </button>
+                                    </div>
+                                    {formData.isTestMode && (
+                                        <p className="text-yellow-400 text-xs mt-2">⚠ Testing mode — this tournament will only be visible to admins, not regular users.</p>
+                                    )}
                                 </div>
 
                                 {/* Max Participants */}
@@ -923,6 +980,33 @@ const TournamentManagement: React.FC = () => {
                                     />
                                     {formErrors.prizePool && <p className="text-red-400 text-xs mt-1">{formErrors.prizePool}</p>}
                                 </div>
+
+                                {/* BR Solo Settlement Config (read-only info bar) */}
+                                {formData.matchType === 'Battle Royale - Solo' && (
+                                    <div className="md:col-span-2">
+                                        <div className="bg-dark-700/60 border border-orange-500/30 rounded-xl p-4">
+                                            <p className="text-orange-400 text-xs font-bold uppercase tracking-wider mb-2">⚡ Solo Settlement Config (Auto-applied)</p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                                <div className="bg-dark-800/80 rounded-lg p-3 text-center">
+                                                    <p className="text-gray-500 text-[10px] uppercase font-semibold">Per Kill</p>
+                                                    <p className="text-white font-bold text-lg">₹{SOLO_DEFAULTS.perKillAmount}</p>
+                                                </div>
+                                                <div className="bg-dark-800/80 rounded-lg p-3 text-center">
+                                                    <p className="text-gray-500 text-[10px] uppercase font-semibold">Rank 1</p>
+                                                    <p className="text-yellow-400 font-bold text-lg">₹{SOLO_DEFAULTS.rankDistribution['1']}</p>
+                                                </div>
+                                                <div className="bg-dark-800/80 rounded-lg p-3 text-center">
+                                                    <p className="text-gray-500 text-[10px] uppercase font-semibold">Rank 2</p>
+                                                    <p className="text-gray-300 font-bold text-lg">₹{SOLO_DEFAULTS.rankDistribution['2']}</p>
+                                                </div>
+                                                <div className="bg-dark-800/80 rounded-lg p-3 text-center">
+                                                    <p className="text-gray-500 text-[10px] uppercase font-semibold">Rank 3</p>
+                                                    <p className="text-orange-300 font-bold text-lg">₹{SOLO_DEFAULTS.rankDistribution['3']}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
 
                                 {/* Rules */}

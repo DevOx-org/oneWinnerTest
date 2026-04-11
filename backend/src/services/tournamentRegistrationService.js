@@ -229,6 +229,7 @@ async function registerWithWallet(userId, tournamentId, teamData = {}) {
                 // — the backend owns sequential slot assignment, frontend value is ignored
                 ...(teamData.teamLeaderName && { teamLeaderName: teamData.teamLeaderName }),
                 ...(teamData.leaderGameName && { leaderGameName: teamData.leaderGameName }),
+                ...(teamData.playerGameName && { playerGameName: teamData.playerGameName }),
                 ...(teamData.teamMember2 && { teamMember2: teamData.teamMember2 }),
                 ...(teamData.teamMember3 && { teamMember3: teamData.teamMember3 }),
                 ...(teamData.teamMember4 && { teamMember4: teamData.teamMember4 }),

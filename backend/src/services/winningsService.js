@@ -86,37 +86,60 @@ async function distributeWinnings(tournamentId, adminId, manualPrizes = null) {
     }
     const tournament = claimed;
 
-    // ── Step 2: Resolve ranked participants ──────────────────────────────────
+    // ── Step 2: Resolve eligible participants ──────────────────────────────────
+    // BR Solo (perKillAmount > 0): participants win via calculatedAmount (kills + rank)
+    // Other modes: participants must have a rank for percentage-based distribution
+    const isBRSolo = Boolean(tournament.perKillAmount && tournament.perKillAmount > 0);
+
     const eligibleParticipants = tournament.participants
-        .filter(p =>
-            (p.status === 'registered' || p.status === 'confirmed') &&
-            typeof p.rank === 'number' && p.rank >= 1
-        )
-        .sort((a, b) => a.rank - b.rank);
+        .filter(p => {
+            if (p.status !== 'registered' && p.status !== 'confirmed') return false;
+            if (isBRSolo) {
+                // BR Solo: eligible if calculatedAmount > 0 OR has a rank
+                return (p.calculatedAmount > 0) || (typeof p.rank === 'number' && p.rank >= 1);
+            }
+            // Other modes: must have a rank
+            return typeof p.rank === 'number' && p.rank >= 1;
+        })
+        .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
 
     if (eligibleParticipants.length === 0) {
         throw new ApiError(
-            'No ranked participants found. Set participant ranks before distributing winnings.',
+            isBRSolo
+                ? 'No participants have settlements saved. Save kill/rank data for participants first.'
+                : 'No ranked participants found. Set participant ranks before distributing winnings.',
             400
         );
     }
 
     const prizePool = tournament.prizePool;
-    if (prizePool <= 0) {
+    if (!isBRSolo && prizePool <= 0) {
         throw new ApiError('Tournament prize pool is 0 — nothing to distribute', 400);
     }
 
     // ── Step 3: Determine prize amount per participant ────────────────────────
-    // manualPrizes: { [userId]: amountRupees } — entered by admin in the UI.
-    // Falls back to percentage-based calculation from prizeDistribution if not provided.
+    // BR Solo: use pre-saved calculatedAmount (kills*perKill + rankAmount)
+    // Other modes: manualPrizes or percentage-based from prizeDistribution
     const prizeDistribution = tournament.prizeDistribution;
-    const distMap = prizeDistribution && prizeDistribution.size > 0
-        ? Object.fromEntries(prizeDistribution)
+    const distMap = prizeDistribution
+        ? (prizeDistribution instanceof Map
+            ? Object.fromEntries(prizeDistribution)
+            : (typeof prizeDistribution === 'object' && Object.keys(prizeDistribution).length > 0
+                ? prizeDistribution
+                : {}))
         : {};
 
     function resolveAmount(participant) {
         const userId = participant.userId.toString();
-        // Manual override takes priority
+
+        // BR Solo mode: use calculatedAmount
+        if (isBRSolo) {
+            const amount = participant.calculatedAmount || 0;
+            if (amount > 0) return { amount: Math.floor(amount), source: 'calculated' };
+            return { amount: 0, source: 'none' };
+        }
+
+        // Manual override takes priority (other modes)
         if (manualPrizes && manualPrizes[userId] != null) {
             const amount = Math.floor(Number(manualPrizes[userId]));
             if (amount > 0) return { amount, source: 'manual' };

@@ -23,6 +23,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
     const [teamData, setTeamData] = useState({
         teamLeaderName: '',
         leaderGameName: '',
+        playerGameName: '',
         teamMember2: '',
         teamMember3: '',
         teamMember4: '',
@@ -50,6 +51,9 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
     }, [isOpen]);
 
     if (!isOpen) return null;
+
+    // Determine if this is a solo match — only 1 player needed, no team members
+    const isSolo = tournament.matchType === 'Battle Royale - Solo';
 
     const hasInsufficientBalance = walletBalance !== null && walletBalance < tournament.entryFee;
 
@@ -85,6 +89,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
             const response = await registerForTournament(tournament.id, {
                 teamLeaderName: teamData.teamLeaderName,
                 leaderGameName: teamData.leaderGameName,
+                ...(isSolo && teamData.playerGameName ? { playerGameName: teamData.playerGameName } : {}),
                 teamMember2: teamData.teamMember2,
                 teamMember3: teamData.teamMember3,
                 teamMember4: teamData.teamMember4,
@@ -131,7 +136,7 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
                     {/* Header */}
                     <div className="sticky top-0 bg-dark-800 border-b border-white/10 p-6 flex items-center justify-between z-10">
                         <div>
-                            <h2 className="text-white text-2xl font-bold">Team Registration</h2>
+                            <h2 className="text-white text-2xl font-bold">{isSolo ? 'Player Registration' : 'Team Registration'}</h2>
                             <p className="text-gray-400 text-sm mt-1">{tournament.title} - {tournament.game}</p>
                         </div>
                         <button
@@ -163,90 +168,115 @@ const RegistrationModal: React.FC<RegistrationModalProps> = ({ tournament, isOpe
 
                         {/* Team Details */}
                         <div>
-                            <h3 className="text-white font-semibold mb-3">Team Details</h3>
+                            <h3 className="text-white font-semibold mb-3">{isSolo ? 'Player Details' : 'Team Details'}</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {/* Team Leader Name */}
                                 <div>
                                     <label className="text-gray-300 text-sm mb-2 block">
-                                        Team Leader Name <span className="text-red-500">*</span>
+                                        {isSolo ? 'Player Name' : 'Team Leader Name'} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         name="teamLeaderName"
                                         value={teamData.teamLeaderName}
                                         onChange={handleInputChange}
-                                        placeholder="Enter leader's real name"
+                                        placeholder={isSolo ? 'Enter your real name' : "Enter leader's real name"}
                                         required
                                         disabled={isProcessing}
                                         className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
                                     />
                                 </div>
 
-                                {/* Leader Game Name */}
+                                {/* Game ID (numeric) */}
                                 <div>
                                     <label className="text-gray-300 text-sm mb-2 block">
-                                        Player-I ID <span className="text-red-500">*</span>
+                                        {isSolo ? 'Game ID' : 'Player-I ID'} <span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="text"
                                         name="leaderGameName"
                                         value={teamData.leaderGameName}
                                         onChange={handleInputChange}
-                                        placeholder="In-game username"
+                                        placeholder={isSolo ? 'Your numeric game ID (e.g. 1234567890)' : 'In-game username'}
                                         required
                                         disabled={isProcessing}
                                         className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
                                     />
                                 </div>
 
-                                {/* Team Member 2 */}
-                                <div>
-                                    <label className="text-gray-300 text-sm mb-2 block">
-                                        Player-II ID <span className="text-red-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="teamMember2"
-                                        value={teamData.teamMember2}
-                                        onChange={handleInputChange}
-                                        placeholder="In-game username"
-                                        required
-                                        disabled={isProcessing}
-                                        className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
-                                    />
-                                </div>
+                                {/* Player Game Name (readable) — Solo only */}
+                                {isSolo && (
+                                    <div className="md:col-span-2">
+                                        <label className="text-gray-300 text-sm mb-2 block">
+                                            In-Game Name <span className="text-red-500">*</span>
+                                        </label>
+                                        <input
+                                            type="text"
+                                            name="playerGameName"
+                                            value={teamData.playerGameName}
+                                            onChange={handleInputChange}
+                                            placeholder="Readable version of your game name (e.g. piyush)"
+                                            required
+                                            disabled={isProcessing}
+                                            className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
+                                        />
+                                        <p className="text-gray-500 text-xs mt-1">Enter the readable/plain version of your stylized in-game name so admins can identify you from match results</p>
+                                    </div>
+                                )}
 
-                                {/* Team Member 3 */}
-                                <div>
-                                    <label className="text-gray-300 text-sm mb-2 block">
-                                        Player-III ID
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="teamMember3"
-                                        value={teamData.teamMember3}
-                                        onChange={handleInputChange}
-                                        placeholder="In-game username (optional)"
-                                        disabled={isProcessing}
-                                        className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
-                                    />
-                                </div>
+                                {/* Team Member fields — hidden for Solo mode */}
+                                {!isSolo && (
+                                    <>
+                                        {/* Team Member 2 */}
+                                        <div>
+                                            <label className="text-gray-300 text-sm mb-2 block">
+                                                Player-II ID <span className="text-red-500">*</span>
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="teamMember2"
+                                                value={teamData.teamMember2}
+                                                onChange={handleInputChange}
+                                                placeholder="In-game username"
+                                                required
+                                                disabled={isProcessing}
+                                                className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
+                                            />
+                                        </div>
 
-                                {/* Team Member 4 */}
-                                <div className="md:col-span-2">
-                                    <label className="text-gray-300 text-sm mb-2 block">
-                                        Player-IV ID
-                                    </label>
-                                    <input
-                                        type="text"
-                                        name="teamMember4"
-                                        value={teamData.teamMember4}
-                                        onChange={handleInputChange}
-                                        placeholder="In-game username (optional)"
-                                        disabled={isProcessing}
-                                        className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
-                                    />
-                                </div>
+                                        {/* Team Member 3 */}
+                                        <div>
+                                            <label className="text-gray-300 text-sm mb-2 block">
+                                                Player-III ID
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="teamMember3"
+                                                value={teamData.teamMember3}
+                                                onChange={handleInputChange}
+                                                placeholder="In-game username (optional)"
+                                                disabled={isProcessing}
+                                                className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
+                                            />
+                                        </div>
+
+                                        {/* Team Member 4 */}
+                                        <div className="md:col-span-2">
+                                            <label className="text-gray-300 text-sm mb-2 block">
+                                                Player-IV ID
+                                            </label>
+                                            <input
+                                                type="text"
+                                                name="teamMember4"
+                                                value={teamData.teamMember4}
+                                                onChange={handleInputChange}
+                                                placeholder="In-game username (optional)"
+                                                disabled={isProcessing}
+                                                className="w-full bg-dark-700 border border-white/10 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:border-primary-orange focus:outline-none transition-colors disabled:opacity-50"
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 

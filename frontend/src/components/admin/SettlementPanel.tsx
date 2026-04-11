@@ -17,6 +17,8 @@ interface PendingSettlement {
     winningsDistributed: boolean;
     prizeDistribution: Record<string, number>;
     matchType?: string | null;
+    perKillAmount?: number;
+    rankDistribution?: Record<string, number> | null;
 }
 
 interface Participant {
@@ -35,11 +37,13 @@ interface Participant {
     winsDistributedAt?: string | null;
     teamLeaderName?: string | null;
     leaderGameName?: string | null;
+    playerGameName?: string | null;
     teamMember2?: string | null;
     teamMember3?: string | null;
     teamMember4?: string | null;
     assignedSlot?: number | null;
     totalKills?: number;
+    calculatedAmount?: number;
 }
 
 interface HistoryRecord {
@@ -111,6 +115,7 @@ export default function SettlementPanel() {
     const [savingRank, setSavingRank] = useState<string | null>(null);
     const [distributing, setDistributing] = useState(false);
     const [killsInputs, setKillsInputs] = useState<Record<string, string>>({});
+    const [calcAmountInputs, setCalcAmountInputs] = useState<Record<string, string>>({});
 
     // Player detail modal
     const [playerDetail, setPlayerDetail] = useState<Participant | null>(null);
@@ -168,44 +173,120 @@ export default function SettlementPanel() {
             setParticipants(list);
             const initRanks: Record<string, string> = {};
             const initKills: Record<string, string> = {};
+            const initCalcAmounts: Record<string, string> = {};
             list.forEach(p => {
                 if (p.rank) initRanks[p.userId] = String(p.rank);
                 if (p.totalKills) initKills[p.userId] = String(p.totalKills);
+                if (p.calculatedAmount) initCalcAmounts[p.userId] = String(p.calculatedAmount);
             });
             setRankInputs(initRanks);
             setKillsInputs(initKills);
-            // Update manageTarget with matchType from API response
-            if (res.data.tournament?.matchType) {
-                setManageTarget(prev => prev ? { ...prev, matchType: res.data.tournament.matchType } : prev);
+            setCalcAmountInputs(initCalcAmounts);
+            // Update manageTarget with matchType + settlement config from API response
+            if (res.data.tournament) {
+                setManageTarget(prev => prev ? {
+                    ...prev,
+                    matchType: res.data.tournament.matchType || prev.matchType,
+                    perKillAmount: res.data.tournament.perKillAmount ?? 0,
+                    rankDistribution: res.data.tournament.rankDistribution ?? null,
+                } : prev);
             }
         } catch { showToast('error', 'Failed to load participants'); }
         finally { setParticipantsLoading(false); }
     };
 
-    // ── Save rank (+ optional totalKills for BR) ──────────────────────────────
+    // ── Save settlement (rank, kills, calculatedAmount) ──────────────────────
+    // BR Solo: rank is optional (player can earn only kill money)
+    // Other modes: rank is required
     const saveRank = async (userId: string) => {
         if (!manageTarget) return;
-        const rank = parseInt(rankInputs[userId] ?? '');
-        if (!rank || rank < 1) { showToast('error', 'Enter a valid rank (≥ 1)'); return; }
-        const killsStr = killsInputs[userId];
-        const totalKills = killsStr !== undefined && killsStr !== '' ? parseInt(killsStr) : undefined;
-        if (totalKills !== undefined && (isNaN(totalKills) || totalKills < 0)) {
-            showToast('error', 'Total Kills must be a non-negative number'); return;
+
+        const isBRSoloMode = manageTarget.matchType === 'Battle Royale - Solo';
+
+        // ── Validate rank ────────────────────────────────────────────────────
+        const rankStr = rankInputs[userId] ?? '';
+        const rank = rankStr ? parseInt(rankStr, 10) : null;
+
+        // BR Solo: rank is optional, but if provided must be 1-3
+        // Other modes: rank is required
+        if (!isBRSoloMode) {
+            if (!rankStr || rank === null || isNaN(rank) || rank < 1 || !Number.isInteger(rank) || String(rank) !== rankStr.trim()) {
+                showToast('error', 'Rank must be a whole number ≥ 1 (e.g. 1, 2, 3)');
+                return;
+            }
+        } else if (rankStr && (rank === null || isNaN(rank) || rank < 1 || rank > 3)) {
+            showToast('error', 'For Solo, rank must be 1, 2, or 3 (or leave empty)');
+            return;
         }
+
+        // ── Client-side duplicate rank check ─────────────────────────────────
+        if (rank && rank >= 1) {
+            const currentHolder = participants.find(
+                p => p.userId !== userId &&
+                     (p.status === 'confirmed' || p.status === 'registered') &&
+                     p.rank === rank
+            );
+            if (currentHolder) {
+                const holderName = currentHolder.teamLeaderName || currentHolder.username || 'another participant';
+                showToast('error', `Rank ${rank} is already held by "${holderName}". Remove their rank first or choose a different rank.`);
+                return;
+            }
+        }
+
+        // ── Validate kills ───────────────────────────────────────────────────
+        const killsStr = killsInputs[userId];
+        const totalKills = killsStr !== undefined && killsStr !== '' ? parseInt(killsStr, 10) : undefined;
+        if (totalKills !== undefined && (isNaN(totalKills) || totalKills < 0)) {
+            showToast('error', 'Total Kills must be a non-negative number');
+            return;
+        }
+
+        // For BR Solo: must have either rank or kills
+        if (isBRSoloMode && !rank && (!totalKills || totalKills <= 0)) {
+            showToast('error', 'Set at least kills or rank for this player');
+            return;
+        }
+
+        // ── Parse calculatedAmount (admin override) ──────────────────────────
+        const calcAmtStr = calcAmountInputs[userId];
+        const calculatedAmount = calcAmtStr !== undefined && calcAmtStr !== '' ? Math.floor(Number(calcAmtStr)) : undefined;
+
         setSavingRank(userId);
         try {
-            await api.patch(`/admin/tournaments/${manageTarget._id}/participants/${userId}/rank`, {
-                rank,
+            const res = await api.patch(`/admin/tournaments/${manageTarget._id}/participants/${userId}/rank`, {
+                ...(rank ? { rank } : {}),
                 ...(totalKills !== undefined ? { totalKills } : {}),
+                ...(calculatedAmount !== undefined ? { calculatedAmount } : {}),
             });
-            setParticipants(prev => prev.map(p => p.userId === userId
-                ? { ...p, rank, ...(totalKills !== undefined ? { totalKills } : {}) }
-                : p
-            ));
-            showToast('success', `Rank ${rank} saved`);
+            const savedData = res.data.participant;
+            // Update local state
+            setParticipants(prev => prev.map(p => {
+                if (p.userId === userId) {
+                    return {
+                        ...p,
+                        rank: savedData.rank ?? p.rank,
+                        totalKills: savedData.totalKills ?? p.totalKills,
+                        calculatedAmount: savedData.calculatedAmount ?? p.calculatedAmount,
+                    };
+                }
+                return p;
+            }));
+            if (rank) setRankInputs(prev => ({ ...prev, [userId]: String(rank) }));
+            if (savedData.calculatedAmount !== undefined) {
+                setCalcAmountInputs(prev => ({ ...prev, [userId]: String(savedData.calculatedAmount) }));
+            }
+            const playerName = participants.find(p => p.userId === userId)?.username ?? 'player';
+            showToast('success', `✅ Settlement saved for ${playerName}: ₹${savedData.calculatedAmount ?? 0}`);
         } catch (e: any) {
-            showToast('error', e.response?.data?.message ?? 'Failed to save rank');
-        } finally { setSavingRank(null); }
+            showToast('error', e.response?.data?.message ?? 'Failed to save settlement');
+        } finally {
+            setSavingRank(null);
+            // Refresh player detail modal if open
+            if (playerDetail?.userId === userId) {
+                const updated = participants.find(p => p.userId === userId);
+                if (updated) setPlayerDetail({ ...updated });
+            }
+        }
     };
 
     // ── Compute total manually assigned prize ────────────────────────────────
@@ -216,18 +297,33 @@ export default function SettlementPanel() {
     // ── Distribute winnings ──────────────────────────────────────────────────
     const handleDistribute = async () => {
         if (!manageTarget) return;
-        const ranked = participants.filter(p => p.rank && p.rank >= 1);
-        if (ranked.length === 0) { showToast('error', 'Set at least one rank before distributing'); return; }
+        const isBRSoloMode = manageTarget.matchType === 'Battle Royale - Solo';
 
-        // Build manualPrizes — only for participants that have a manual amount entered
+        // Build manualPrizes once (only used for non-solo modes)
         const manualPrizes: Record<string, number> = {};
         let hasManual = false;
-        for (const [uid, val] of Object.entries(prizeInputs)) {
-            const amt = parseFloat(val);
-            if (amt > 0) { manualPrizes[uid] = amt; hasManual = true; }
+        if (!isBRSoloMode) {
+            for (const [uid, val] of Object.entries(prizeInputs)) {
+                const amt = parseFloat(val);
+                if (amt > 0) { manualPrizes[uid] = amt; hasManual = true; }
+            }
         }
 
-        if (!window.confirm(`Distribute winnings for "${manageTarget.title}"?\n\nTotal distributing: ${INR(hasManual ? manualTotal : prizePool)}\n\nThis cannot be undone.`)) return;
+        // Confirmation dialog
+        if (isBRSoloMode) {
+            const eligible = participants.filter(p => (p.calculatedAmount ?? 0) > 0);
+            if (eligible.length === 0) {
+                showToast('error', 'No settlements saved yet. Save kill/rank data for players first.');
+                return;
+            }
+            const totalCalc = eligible.reduce((s, p) => s + (p.calculatedAmount ?? 0), 0);
+            if (!window.confirm(`Distribute winnings for "${manageTarget.title}"?\n\n${eligible.length} player(s) with total: ${INR(totalCalc)}\n\nThis cannot be undone.`)) return;
+        } else {
+            const ranked = participants.filter(p => p.rank && p.rank >= 1);
+            if (ranked.length === 0) { showToast('error', 'Set at least one rank before distributing'); return; }
+            if (!window.confirm(`Distribute winnings for "${manageTarget.title}"?\n\nTotal distributing: ${INR(hasManual ? manualTotal : prizePool)}\n\nThis cannot be undone.`)) return;
+        }
+
         setDistributing(true);
         try {
             const res = await api.post(`/admin/tournaments/${manageTarget._id}/distribute-winnings`, {
@@ -274,6 +370,7 @@ export default function SettlementPanel() {
         const term = debouncedSearchTerm.trim().toLowerCase();
         return participants.filter(p =>
             p.leaderGameName?.toLowerCase().includes(term) ||
+            p.playerGameName?.toLowerCase().includes(term) ||
             p.teamLeaderName?.toLowerCase().includes(term) ||
             p.username?.toLowerCase().includes(term) ||
             p.email?.toLowerCase().includes(term)
@@ -330,7 +427,7 @@ export default function SettlementPanel() {
             </div>
 
             {/* ── Pending Tab ──────────────────────────────────────────────── */}
-            {tab === 'pending' && (
+            {tab === 'pending' && !manageTarget && (
                 <>
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
                         <button onClick={fetchPending} style={btnSm}>🔄 Refresh</button>
@@ -341,7 +438,13 @@ export default function SettlementPanel() {
                         <EmptyState icon="✅" msg="All caught up — no pending settlements." />
                     )}
                     {pending.map(t => (
-                        <div key={t._id} style={card}>
+                        <div
+                            key={t._id}
+                            style={{ ...card, cursor: 'pointer', transition: 'border-color 0.2s, box-shadow 0.2s' }}
+                            onClick={() => openManage(t)}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(249,115,22,0.35)'; e.currentTarget.style.boxShadow = '0 0 0 1px rgba(249,115,22,0.15)'; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.boxShadow = 'none'; }}
+                        >
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                                 <div style={{ flex: 1, minWidth: 260 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
@@ -376,102 +479,31 @@ export default function SettlementPanel() {
                                         </div>
                                     )}
                                 </div>
-                                <button onClick={() => openManage(t)} style={btnSecondary}>👥 Manage Players →</button>
                             </div>
                         </div>
                     ))}
                 </>
             )}
 
-            {/* ── History Tab ───────────────────────────────────────────────── */}
-            {tab === 'history' && (
-                <>
-                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                        <button onClick={fetchHistory} style={btnSm}>🔄 Refresh</button>
-                    </div>
-                    {historyLoading && <LoadingRows />}
-                    {historyError && <ErrorMsg msg={historyError} />}
-                    {!historyLoading && !historyError && history.length === 0 && (
-                        <EmptyState icon="📋" msg="No settlements distributed yet." />
-                    )}
-                    {history.map(t => (
-                        <div key={t._id} style={card}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                                <div style={{ flex: 1, minWidth: 260 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
-                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f3f4f6' }}>{t.title}</h3>
-                                        <span style={gameBadge}>{t.game}</span>
-                                        <span style={settledBadge}>✅ Settled</span>
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 13, color: '#9ca3af', marginBottom: 10 }}>
-                                        <span>📅 Ended: <strong style={{ color: '#d1d5db' }}>{fmtDate(t.endDate)}</strong></span>
-                                        <span>🕐 Settled: <strong style={{ color: '#10b981' }}>{fmt(t.distributedAt)}</strong></span>
-                                        {t.distributedBy && <span>👤 By: <strong style={{ color: '#d1d5db' }}>{t.distributedBy.name}</strong></span>}
-                                    </div>
-                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', fontSize: 13 }}>
-                                        <StatChip icon="🏆" label="Prize Pool" value={INR(t.prizePool)} color="#f97316" />
-                                        <StatChip icon="💰" label="Distributed" value={INR(t.totalDistributed)} color="#10b981" />
-                                        <StatChip icon="🥇" label="Winners" value={String(t.winnerCount)} color="#fbbf24" />
-                                        <StatChip icon="👥" label="Players" value={String(t.participantCount)} color="#60a5fa" />
-                                    </div>
-                                </div>
-                                <button onClick={() => toggleHistoryDetail(t._id)} style={btnSm}>
-                                    {expandedHistory === t._id ? '▲ Hide' : '▼ View Details'}
-                                </button>
-                            </div>
-                            {expandedHistory === t._id && (
-                                <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
-                                    {!historyDetail[t._id] ? (
-                                        <p style={{ color: '#6b7280', fontSize: 13 }}>Loading…</p>
-                                    ) : (
-                                        <>
-                                            <h4 style={{ margin: '0 0 12px', color: '#f97316', fontSize: 14 }}>Winner Breakdown</h4>
-                                            <div style={{ overflowX: 'auto' }}>
-                                                <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 13 }}>
-                                                <thead>
-                                                    <tr>
-                                                        {['Rank', 'Team Leader', 'Game Name', 'Slot', 'Prize Won', 'Credited At'].map(h => (
-                                                            <th key={h} style={thStyle}>{h}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {historyDetail[t._id].participants
-                                                        .filter(p => p.winningAmount > 0)
-                                                        .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
-                                                        .map((p, i) => (
-                                                            <tr key={String(p.userId)} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                                                <td style={tdStyle}>
-                                                                    <span style={{ color: RANK_COLORS[p.rankLabel ?? ''] || '#f97316', fontWeight: 700 }}>
-                                                                        {p.rankLabel ?? `#${p.rank}`}
-                                                                    </span>
-                                                                </td>
-                                                                <td style={tdStyle}>{p.teamLeaderName ?? `Player ${i + 1}`}</td>
-                                                                <td style={tdStyle}>{p.leaderGameName ?? '—'}</td>
-                                                                <td style={tdStyle}>{p.assignedSlot ?? '—'}</td>
-                                                                <td style={{ ...tdStyle, color: '#10b981', fontWeight: 700 }}>{INR(p.winningAmount)}</td>
-                                                                <td style={tdStyle}>{p.winsDistributedAt ? fmt(p.winsDistributedAt) : '—'}</td>
-                                                            </tr>
-                                                        ))}
-                                                </tbody>
-                                                </table>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                </>
-            )}
+            {/* ── Manage Players (inline view) ─────────────────────────────── */}
+            {tab === 'pending' && manageTarget && (
+                <div>
+                    <button
+                        onClick={() => { if (!distributing) { setManageTarget(null); setParticipants([]); setSearchTerm(''); setDebouncedSearchTerm(''); setKillsInputs({}); } }}
+                        style={{ ...btnSm, marginBottom: 14, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                        ← Back to Settlements
+                    </button>
 
-            {/* ── Manage Players Modal ──────────────────────────────────────── */}
-            {manageTarget && (
-                <div style={modalOverlay} onClick={() => { if (!distributing) { setManageTarget(null); setParticipants([]); setSearchTerm(''); setDebouncedSearchTerm(''); setKillsInputs({}); } }}>
-                    <div style={modalBox} onClick={e => e.stopPropagation()}>
+                    <div style={{
+                        background: 'rgba(255,255,255,0.025)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 16,
+                        padding: '22px 24px',
+                    }}>
 
                         {/* Header */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, paddingBottom: 16, borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <div>
                                 <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#f3f4f6' }}>{manageTarget.title}</h3>
                                 <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>
@@ -492,7 +524,6 @@ export default function SettlementPanel() {
                                 >
                                     {distributing ? '⏳ Distributing…' : '🏆 Distribute Winnings'}
                                 </button>
-                                <button onClick={() => { setManageTarget(null); setParticipants([]); setSearchTerm(''); setDebouncedSearchTerm(''); setKillsInputs({}); }} style={btnSm}>✕</button>
                             </div>
                         </div>
 
@@ -647,7 +678,7 @@ export default function SettlementPanel() {
                             <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
                                 <div style={{ fontSize: 40, marginBottom: 10 }}>🔍</div>
                                 <p style={{ fontSize: 15, margin: 0 }}>No players found for &ldquo;<strong style={{ color: '#f97316' }}>{debouncedSearchTerm}</strong>&rdquo;</p>
-                                <p style={{ fontSize: 12, margin: '6px 0 0', color: '#4b5563' }}>Try searching by Game ID or Player Name</p>
+                                <p style={{ fontSize: 12, margin: '6px 0 0', color: '#4b5563' }}>Try searching by In-Game Name, Game ID, or Player Name</p>
                             </div>
                         ) : (
                             <div style={{ overflowX: 'auto' }}>
@@ -655,7 +686,7 @@ export default function SettlementPanel() {
                                     <thead>
                                         <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                                             {(isBR
-                                                ? ['Player', 'Team Leader', 'Game Name', 'Slot', 'Status', 'Rank', 'Kills', '']
+                                                ? ['Player', 'Team Leader', 'In-Game Name', 'Slot', 'Status', 'Rank', 'Kills', 'Settlement']
                                                 : ['Player', 'Team Leader', 'Game Name', 'Slot', 'Status', 'Rank', 'Set Rank', 'Prize ₹ (manual)', '']
                                             ).map(h => (
                                                 <th key={h} style={thStyle}>{h}</th>
@@ -670,8 +701,11 @@ export default function SettlementPanel() {
                                                     borderBottom: '1px solid rgba(255,255,255,0.04)',
                                                     cursor: 'pointer',
                                                     background: p.rank ? 'rgba(249,115,22,0.03)' : 'transparent',
+                                                    transition: 'background 0.15s',
                                                 }}
                                                 onClick={() => setPlayerDetail(p)}
+                                                onMouseEnter={e => { e.currentTarget.style.background = p.rank ? 'rgba(249,115,22,0.07)' : 'rgba(255,255,255,0.03)'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = p.rank ? 'rgba(249,115,22,0.03)' : 'transparent'; }}
                                             >
                                                 <td style={tdStyle}>
                                                     <div style={{ fontWeight: 600, color: '#f3f4f6' }}>{highlightMatch(p.username)}</div>
@@ -683,9 +717,20 @@ export default function SettlementPanel() {
                                                     </span>
                                                 </td>
                                                 <td style={tdStyle}>
-                                                    <span style={{ color: p.leaderGameName ? '#d1d5db' : '#4b5563' }}>
-                                                        {highlightMatch(p.leaderGameName)}
-                                                    </span>
+                                                    {isBR && p.playerGameName ? (
+                                                        <>
+                                                            <span style={{ color: '#d1d5db', fontWeight: 600 }}>
+                                                                {highlightMatch(p.playerGameName)}
+                                                            </span>
+                                                            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                                                                ID: {p.leaderGameName || '—'}
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <span style={{ color: p.leaderGameName ? '#d1d5db' : '#4b5563' }}>
+                                                            {highlightMatch(p.leaderGameName)}
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td style={tdStyle}>
                                                     <span style={{ color: p.assignedSlot != null ? '#60a5fa' : '#4b5563', fontWeight: p.assignedSlot != null ? 700 : 400 }}>
@@ -705,22 +750,19 @@ export default function SettlementPanel() {
                                                         : <span style={{ color: '#4b5563' }}>—</span>}
                                                 </td>
 
-                                                {/* ── BR mode: show kills + Details button ── */}
+                                                {/* ── BR mode: show kills ── */}
                                                 {isBR ? (
                                                     <>
-                                                        <td style={tdStyle}>
-                                                            <span style={{ color: (p.totalKills ?? 0) > 0 ? '#10b981' : '#4b5563', fontWeight: (p.totalKills ?? 0) > 0 ? 700 : 400 }}>
-                                                                {(p.totalKills ?? 0) > 0 ? p.totalKills : '—'}
-                                                            </span>
-                                                        </td>
-                                                        <td style={tdStyle} onClick={e => e.stopPropagation()}>
-                                                            <button
-                                                                onClick={() => setPlayerDetail(p)}
-                                                                style={{ ...btnSm, fontSize: 11, padding: '5px 10px' }}
-                                                            >
-                                                                Details →
-                                                            </button>
-                                                        </td>
+                                                    <td style={tdStyle}>
+                                                        <span style={{ color: (p.totalKills ?? 0) > 0 ? '#10b981' : '#4b5563', fontWeight: (p.totalKills ?? 0) > 0 ? 700 : 400 }}>
+                                                            {(p.totalKills ?? 0) > 0 ? p.totalKills : '—'}
+                                                        </span>
+                                                    </td>
+                                                    <td style={tdStyle}>
+                                                        <span style={{ color: (p.calculatedAmount ?? 0) > 0 ? '#10b981' : '#4b5563', fontWeight: (p.calculatedAmount ?? 0) > 0 ? 700 : 400 }}>
+                                                            {(p.calculatedAmount ?? 0) > 0 ? INR(p.calculatedAmount!) : '—'}
+                                                        </span>
+                                                    </td>
                                                     </>
                                                 ) : (
                                                     /* ── TDM mode: inline Set Rank, Prize ₹, Save ── */
@@ -763,7 +805,7 @@ export default function SettlementPanel() {
                                 </table>
                                 <p style={{ fontSize: 12, color: '#6b7280', marginTop: 10, textAlign: 'center' }}>
                                     {isBR
-                                        ? '💡 Click any row or "Details →" to set rank, kills, and prize inside the player modal'
+                                        ? '💡 Click any row to set rank, kills, and prize inside the player modal'
                                         : '💡 Click any row to view full player registration details · Prize ₹ fields are optional — leave blank to use % distribution'
                                     }
                                 </p>
@@ -772,6 +814,89 @@ export default function SettlementPanel() {
                     </div>
                 </div>
             )}
+
+            {/* ── History Tab ───────────────────────────────────────────────── */}
+            {tab === 'history' && (
+                <>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                        <button onClick={fetchHistory} style={btnSm}>🔄 Refresh</button>
+                    </div>
+                    {historyLoading && <LoadingRows />}
+                    {historyError && <ErrorMsg msg={historyError} />}
+                    {!historyLoading && !historyError && history.length === 0 && (
+                        <EmptyState icon="📋" msg="No settlements distributed yet." />
+                    )}
+                    {history.map(t => (
+                        <div key={t._id} style={card}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                                <div style={{ flex: 1, minWidth: 260 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6, flexWrap: 'wrap' }}>
+                                        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#f3f4f6' }}>{t.title}</h3>
+                                        <span style={gameBadge}>{t.game}</span>
+                                        <span style={settledBadge}>✅ Settled</span>
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 20px', fontSize: 13, color: '#9ca3af', marginBottom: 10 }}>
+                                        <span>📅 Ended: <strong style={{ color: '#d1d5db' }}>{fmtDate(t.endDate)}</strong></span>
+                                        <span>🕐 Settled: <strong style={{ color: '#10b981' }}>{fmt(t.distributedAt)}</strong></span>
+                                        {t.distributedBy && <span>👤 By: <strong style={{ color: '#d1d5db' }}>{t.distributedBy.name}</strong></span>}
+                                    </div>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 24px', fontSize: 13 }}>
+                                        <StatChip icon="🏆" label="Prize Pool" value={INR(t.prizePool)} color="#f97316" />
+                                        <StatChip icon="💰" label="Distributed" value={INR(t.totalDistributed)} color="#10b981" />
+                                        <StatChip icon="🥇" label="Winners" value={String(t.winnerCount)} color="#fbbf24" />
+                                        <StatChip icon="👥" label="Players" value={String(t.participantCount)} color="#60a5fa" />
+                                    </div>
+                                </div>
+                                <button onClick={() => toggleHistoryDetail(t._id)} style={btnSm}>
+                                    {expandedHistory === t._id ? '▲ Hide' : '▼ View Details'}
+                                </button>
+                            </div>
+                            {expandedHistory === t._id && (
+                                <div style={{ marginTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 16 }}>
+                                    {!historyDetail[t._id] ? (
+                                        <p style={{ color: '#6b7280', fontSize: 13 }}>Loading…</p>
+                                    ) : (
+                                        <>
+                                            <h4 style={{ margin: '0 0 12px', color: '#f97316', fontSize: 14 }}>Winner Breakdown</h4>
+                                            <div style={{ overflowX: 'auto' }}>
+                                                <table style={{ width: '100%', minWidth: 600, borderCollapse: 'collapse', fontSize: 13 }}>
+                                                <thead>
+                                                    <tr>
+                                                        {['Rank', 'Team Leader', 'Game Name', 'Slot', 'Prize Won', 'Credited At'].map(h => (
+                                                            <th key={h} style={thStyle}>{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {historyDetail[t._id].participants
+                                                        .filter(p => p.winningAmount > 0)
+                                                        .sort((a, b) => (a.rank ?? 99) - (b.rank ?? 99))
+                                                        .map((p, i) => (
+                                                            <tr key={String(p.userId)} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                                                <td style={tdStyle}>
+                                                                    <span style={{ color: RANK_COLORS[p.rankLabel ?? ''] || '#f97316', fontWeight: 700 }}>
+                                                                        {p.rankLabel ?? `#${p.rank}`}
+                                                                    </span>
+                                                                </td>
+                                                                <td style={tdStyle}>{p.teamLeaderName ?? `Player ${i + 1}`}</td>
+                                                                <td style={tdStyle}>{p.leaderGameName ?? '—'}</td>
+                                                                <td style={tdStyle}>{p.assignedSlot ?? '—'}</td>
+                                                                <td style={{ ...tdStyle, color: '#10b981', fontWeight: 700 }}>{INR(p.winningAmount)}</td>
+                                                                <td style={tdStyle}>{p.winsDistributedAt ? fmt(p.winsDistributedAt) : '—'}</td>
+                                                            </tr>
+                                                        ))}
+                                                </tbody>
+                                                </table>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </>
+            )}
+
 
             {/* ── Player Detail Modal ──────────────────────────────────────── */}
             {playerDetail && (
@@ -816,99 +941,216 @@ export default function SettlementPanel() {
                         )}
 
                         {/* ── BR Settlement Details Section ──────────────────── */}
-                        {isBR && !manageTarget?.winningsDistributed && (
-                            <>
-                                <div style={{
-                                    marginTop: 20,
-                                    borderTop: '1px solid rgba(255,255,255,0.08)',
-                                    paddingTop: 20,
-                                }}>
-                                    <h4 style={{
-                                        margin: '0 0 16px',
-                                        fontSize: 15,
-                                        fontWeight: 700,
-                                        color: '#f97316',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 8,
+                        {isBR && !manageTarget?.winningsDistributed && (() => {
+                            const isSoloMode = manageTarget?.matchType === 'Battle Royale - Solo';
+                            const perKill = manageTarget?.perKillAmount ?? 0;
+                            const rd = manageTarget?.rankDistribution ?? {};
+                            const kills = parseInt(killsInputs[playerDetail.userId] ?? '0', 10) || 0;
+                            const rankVal = rankInputs[playerDetail.userId] ?? '';
+                            const rankNum = rankVal ? parseInt(rankVal, 10) : null;
+                            const killAmount = kills * perKill;
+                            const rankAmount = (rankNum && rd[String(rankNum)]) ? rd[String(rankNum)] : 0;
+                            const autoTotal = killAmount + rankAmount;
+                            // If user has manually changed the amount, use that; otherwise use auto
+                            const currentCalcStr = calcAmountInputs[playerDetail.userId];
+                            const hasManualOverride = currentCalcStr !== undefined && currentCalcStr !== '' && Number(currentCalcStr) !== autoTotal;
+
+                            return (
+                                <>
+                                    <div style={{
+                                        marginTop: 20,
+                                        borderTop: '1px solid rgba(255,255,255,0.08)',
+                                        paddingTop: 20,
                                     }}>
-                                        ⚔️ Settlement Details
-                                    </h4>
+                                        <h4 style={{
+                                            margin: '0 0 16px',
+                                            fontSize: 15,
+                                            fontWeight: 700,
+                                            color: '#f97316',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 8,
+                                        }}>
+                                            ⚔️ Settlement Details {isSoloMode && <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 500 }}>(Solo — Kill + Rank)</span>}
+                                        </h4>
 
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-                                        {/* Set Rank */}
-                                        <div style={settlementFieldBox}>
-                                            <label style={settlementLabel}>Set Rank</label>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                value={rankInputs[playerDetail.userId] ?? ''}
-                                                onChange={e => setRankInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
-                                                placeholder="1, 2, 3…"
-                                                style={settlementInput}
-                                            />
-                                        </div>
+                                        {isSoloMode ? (
+                                            <>
+                                                {/* Solo mode: Kills, Rank dropdown, Total Amount */}
+                                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                                                    {/* Kills */}
+                                                    <div style={settlementFieldBox}>
+                                                        <label style={settlementLabel}>Kills</label>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={killsInputs[playerDetail.userId] ?? ''}
+                                                            onChange={e => {
+                                                                setKillsInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }));
+                                                                // Auto-recalc
+                                                                const k = parseInt(e.target.value, 10) || 0;
+                                                                const rk = rankInputs[playerDetail.userId] ? parseInt(rankInputs[playerDetail.userId], 10) : null;
+                                                                const ka = k * perKill;
+                                                                const ra = (rk && rd[String(rk)]) ? rd[String(rk)] : 0;
+                                                                setCalcAmountInputs(prev => ({ ...prev, [playerDetail.userId]: String(ka + ra) }));
+                                                            }}
+                                                            placeholder="0"
+                                                            style={settlementInput}
+                                                        />
+                                                    </div>
 
-                                        {/* Prize ₹ */}
-                                        <div style={settlementFieldBox}>
-                                            <label style={settlementLabel}>Prize ₹</label>
-                                            <div style={{ position: 'relative' }}>
-                                                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: 13, pointerEvents: 'none' }}>₹</span>
-                                                <input
-                                                    type="number"
-                                                    min={0}
-                                                    value={prizeInputs[playerDetail.userId] ?? ''}
-                                                    onChange={e => setPrizeInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
-                                                    placeholder="e.g. 500"
-                                                    style={{ ...settlementInput, paddingLeft: 24 }}
-                                                />
+                                                    {/* Rank (dropdown: —, 1, 2, 3) */}
+                                                    <div style={settlementFieldBox}>
+                                                        <label style={settlementLabel}>Rank</label>
+                                                        <select
+                                                            value={rankInputs[playerDetail.userId] ?? ''}
+                                                            onChange={e => {
+                                                                setRankInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }));
+                                                                // Auto-recalc
+                                                                const k = parseInt(killsInputs[playerDetail.userId] ?? '0', 10) || 0;
+                                                                const rk = e.target.value ? parseInt(e.target.value, 10) : null;
+                                                                const ka = k * perKill;
+                                                                const ra = (rk && rd[String(rk)]) ? rd[String(rk)] : 0;
+                                                                setCalcAmountInputs(prev => ({ ...prev, [playerDetail.userId]: String(ka + ra) }));
+                                                            }}
+                                                            style={settlementInput}
+                                                        >
+                                                            <option value="">— None —</option>
+                                                            <option value="1">🥇 Rank 1 (+₹{rd['1'] ?? 0})</option>
+                                                            <option value="2">🥈 Rank 2 (+₹{rd['2'] ?? 0})</option>
+                                                            <option value="3">🥉 Rank 3 (+₹{rd['3'] ?? 0})</option>
+                                                        </select>
+                                                    </div>
+
+                                                    {/* Total Amount (auto-calculated, editable) */}
+                                                    <div style={settlementFieldBox}>
+                                                        <label style={settlementLabel}>Total Amount</label>
+                                                        <div style={{ position: 'relative' }}>
+                                                            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#10b981', fontSize: 13, pointerEvents: 'none', fontWeight: 700 }}>₹</span>
+                                                            <input
+                                                                type="number"
+                                                                min={0}
+                                                                value={calcAmountInputs[playerDetail.userId] ?? String(autoTotal)}
+                                                                onChange={e => setCalcAmountInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
+                                                                style={{ ...settlementInput, paddingLeft: 24, color: '#10b981', fontWeight: 700 }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Breakdown */}
+                                                <div style={{
+                                                    marginTop: 12,
+                                                    background: 'rgba(16,185,129,0.06)',
+                                                    border: '1px solid rgba(16,185,129,0.15)',
+                                                    borderRadius: 10,
+                                                    padding: '10px 16px',
+                                                    fontSize: 12,
+                                                    color: '#9ca3af',
+                                                    display: 'flex',
+                                                    gap: 16,
+                                                    flexWrap: 'wrap',
+                                                    alignItems: 'center',
+                                                }}>
+                                                    <span>Kill Amount: <strong style={{ color: '#f3f4f6' }}>{kills} × ₹{perKill} = ₹{killAmount}</strong></span>
+                                                    <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+                                                    <span>Rank Amount: <strong style={{ color: rankNum ? '#fbbf24' : '#4b5563' }}>{rankNum ? `Rank ${rankNum} = ₹${rankAmount}` : '—'}</strong></span>
+                                                    <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+                                                    <span>Auto Total: <strong style={{ color: '#10b981' }}>₹{autoTotal}</strong></span>
+                                                    {hasManualOverride && (
+                                                        <>
+                                                            <span style={{ color: 'rgba(255,255,255,0.15)' }}>|</span>
+                                                            <span style={{ color: '#f59e0b' }}>⚠️ Manual override: <strong>₹{currentCalcStr}</strong>
+                                                                <button
+                                                                    onClick={() => setCalcAmountInputs(prev => ({ ...prev, [playerDetail.userId]: String(autoTotal) }))}
+                                                                    style={{ background: 'none', border: 'none', color: '#60a5fa', cursor: 'pointer', fontSize: 11, marginLeft: 4, textDecoration: 'underline' }}
+                                                                >Reset</button>
+                                                            </span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            /* Non-solo BR: keep existing layout */
+                                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                                                {/* Set Rank */}
+                                                <div style={settlementFieldBox}>
+                                                    <label style={settlementLabel}>Set Rank</label>
+                                                    <input
+                                                        type="number"
+                                                        min={1}
+                                                        value={rankInputs[playerDetail.userId] ?? ''}
+                                                        onChange={e => setRankInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
+                                                        placeholder="1, 2, 3…"
+                                                        style={settlementInput}
+                                                    />
+                                                </div>
+
+                                                {/* Prize ₹ */}
+                                                <div style={settlementFieldBox}>
+                                                    <label style={settlementLabel}>Prize ₹</label>
+                                                    <div style={{ position: 'relative' }}>
+                                                        <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#6b7280', fontSize: 13, pointerEvents: 'none' }}>₹</span>
+                                                        <input
+                                                            type="number"
+                                                            min={0}
+                                                            value={prizeInputs[playerDetail.userId] ?? ''}
+                                                            onChange={e => setPrizeInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
+                                                            placeholder="e.g. 500"
+                                                            style={{ ...settlementInput, paddingLeft: 24 }}
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                {/* Total Kills */}
+                                                <div style={settlementFieldBox}>
+                                                    <label style={settlementLabel}>Total Kills</label>
+                                                    <input
+                                                        type="number"
+                                                        min={0}
+                                                        value={killsInputs[playerDetail.userId] ?? ''}
+                                                        onChange={e => setKillsInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
+                                                        placeholder="0"
+                                                        style={settlementInput}
+                                                    />
+                                                </div>
                                             </div>
+                                        )}
+
+                                        {/* Save Settlement Button */}
+                                        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                                            <button
+                                                onClick={() => saveRank(playerDetail.userId)}
+                                                disabled={savingRank === playerDetail.userId}
+                                                style={{
+                                                    padding: '10px 24px',
+                                                    borderRadius: 10,
+                                                    border: 'none',
+                                                    background: savingRank === playerDetail.userId
+                                                        ? 'rgba(249,115,22,0.2)'
+                                                        : 'linear-gradient(135deg, #f97316, #ea580c)',
+                                                    color: '#fff',
+                                                    fontSize: 13,
+                                                    fontWeight: 700,
+                                                    cursor: savingRank === playerDetail.userId ? 'not-allowed' : 'pointer',
+                                                    opacity: savingRank === playerDetail.userId ? 0.5 : 1,
+                                                    transition: 'all 0.2s ease',
+                                                }}
+                                            >
+                                                {savingRank === playerDetail.userId ? '⏳ Saving…' : '💾 Save Settlement'}
+                                            </button>
                                         </div>
 
-                                        {/* Total Kills */}
-                                        <div style={settlementFieldBox}>
-                                            <label style={settlementLabel}>Total Kills</label>
-                                            <input
-                                                type="number"
-                                                min={0}
-                                                value={killsInputs[playerDetail.userId] ?? ''}
-                                                onChange={e => setKillsInputs(prev => ({ ...prev, [playerDetail.userId]: e.target.value }))}
-                                                placeholder="0"
-                                                style={settlementInput}
-                                            />
-                                        </div>
+                                        <p style={{ fontSize: 11, color: '#4b5563', marginTop: 10 }}>
+                                            {isSoloMode
+                                                ? '💡 Total = (Kills × ₹perKill) + Rank Prize. You can override the total manually.'
+                                                : '💡 Prize ₹ is optional — leave blank to use default % distribution. Total Kills is for record-keeping.'
+                                            }
+                                        </p>
                                     </div>
-
-                                    {/* Save Settlement Button */}
-                                    <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-                                        <button
-                                            onClick={() => saveRank(playerDetail.userId)}
-                                            disabled={savingRank === playerDetail.userId || !rankInputs[playerDetail.userId]}
-                                            style={{
-                                                padding: '10px 24px',
-                                                borderRadius: 10,
-                                                border: 'none',
-                                                background: (!rankInputs[playerDetail.userId] || savingRank === playerDetail.userId)
-                                                    ? 'rgba(249,115,22,0.2)'
-                                                    : 'linear-gradient(135deg, #f97316, #ea580c)',
-                                                color: '#fff',
-                                                fontSize: 13,
-                                                fontWeight: 700,
-                                                cursor: (!rankInputs[playerDetail.userId] || savingRank === playerDetail.userId) ? 'not-allowed' : 'pointer',
-                                                opacity: (!rankInputs[playerDetail.userId] || savingRank === playerDetail.userId) ? 0.5 : 1,
-                                                transition: 'all 0.2s ease',
-                                            }}
-                                        >
-                                            {savingRank === playerDetail.userId ? '⏳ Saving…' : '💾 Save Settlement'}
-                                        </button>
-                                    </div>
-
-                                    <p style={{ fontSize: 11, color: '#4b5563', marginTop: 10 }}>
-                                        💡 Prize ₹ is optional — leave blank to use default % distribution. Total Kills is for record-keeping.
-                                    </p>
-                                </div>
-                            </>
-                        )}
+                                </>
+                            );
+                        })()}
                     </div>
                 </div>
             )}

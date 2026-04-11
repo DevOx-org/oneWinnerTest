@@ -26,6 +26,7 @@ exports.getPublicTournaments = asyncHandler(async (req, res) => {
     // ── 1. Build filter ──────────────────────────────────────────────────────
     const filter = {
         isDeleted: false,
+        isTestMode: { $ne: true }, // Never show test tournaments to public users
         status: { $in: ['upcoming', 'live'] },
     };
 
@@ -47,7 +48,7 @@ exports.getPublicTournaments = asyncHandler(async (req, res) => {
             .sort({ startDate: 1 })
             .skip(skip)
             .limit(parsedLimit)
-            .select('-isDeleted -__v -roomId -roomPassword -rules -prizeDistribution -updatedBy -matchType')
+            .select('-isDeleted -__v -roomId -roomPassword -rules -prizeDistribution -updatedBy')
             .select({ 'participants.userId': 1, 'participants.status': 1 }) // tight projection
             .lean(),
         Tournament.countDocuments(filter),
@@ -199,6 +200,7 @@ exports.registerForTournament = asyncHandler(async (req, res) => {
     const teamData = {
         teamLeaderName: req.body.teamLeaderName || null,
         leaderGameName: req.body.leaderGameName || null,
+        playerGameName: req.body.playerGameName || null,
         teamMember2: req.body.teamMember2 || null,
         teamMember3: req.body.teamMember3 || null,
         teamMember4: req.body.teamMember4 || null,

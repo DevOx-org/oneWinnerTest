@@ -26,8 +26,20 @@ const MATCH_TYPE_SLOTS = Object.freeze({
 // ── Convenience: array of valid enum strings ──────────────────────────────────
 const VALID_MATCH_TYPES = Object.values(MATCH_TYPES);
 
+// ── Default config per match type (auto-fill on creation) ─────────────────────
+// Used by the admin creation form. Backend stores these on the tournament doc.
+const MATCH_TYPE_DEFAULTS = Object.freeze({
+    [MATCH_TYPES.BATTLE_ROYALE_SOLO]: {
+        prizePool: 420,
+        entryFee: 20,
+        perKillAmount: 8,
+        rankDistribution: { '1': 80, '2': 60, '3': 40 },
+    },
+});
+
 module.exports = {
     MATCH_TYPES,
     MATCH_TYPE_SLOTS,
+    MATCH_TYPE_DEFAULTS,
     VALID_MATCH_TYPES,
 };

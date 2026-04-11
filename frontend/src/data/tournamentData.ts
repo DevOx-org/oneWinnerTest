@@ -24,4 +24,6 @@ export interface Tournament {
     tournamentState?: 'OPEN' | 'REGISTRATION_CLOSED' | 'LIVE' | 'COMPLETED';
     /** Server-computed: true only when UPCOMING + before registration deadline */
     registrationOpen?: boolean;
+    /** Match type: 'TDM' | 'Battle Royale - Solo' | 'Battle Royale - Squad' */
+    matchType?: string;
 }

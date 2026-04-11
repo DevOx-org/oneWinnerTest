@@ -375,7 +375,7 @@ const getAllTournaments = asyncHandler(async (req, res) => {
     });
 });
 
-// ─── Helper: derive correct status from dates ──────────────────────────────
+// â”€â”€â”€ Helper: derive correct status from dates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Admin can still manually override to 'cancelled' or 'draft',
 // but start/end dates must always agree with the computed status.
 const computeStatus = ({ startDate, endDate, status }) => {
@@ -395,7 +395,7 @@ const computeStatus = ({ startDate, endDate, status }) => {
 const createTournament = asyncHandler(async (req, res) => {
     const { startDate, endDate, matchType } = req.body;
 
-    // ── matchType validation ──────────────────────────────────────────────────
+    // â”€â”€ matchType validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (matchType && !VALID_MATCH_TYPES.includes(matchType)) {
         throw new ApiError(
             `Invalid matchType "${matchType}". Valid values: ${VALID_MATCH_TYPES.join(', ')}`,
@@ -405,7 +405,7 @@ const createTournament = asyncHandler(async (req, res) => {
 
     // When matchType is set, log auto-derived maxParticipants for admin clarity
     if (matchType && MATCH_TYPE_SLOTS[matchType] !== undefined) {
-        logger.info(`matchType "${matchType}" selected — maxParticipants auto-set to ${MATCH_TYPE_SLOTS[matchType]}`);
+        logger.info(`matchType "${matchType}" selected â€” maxParticipants auto-set to ${MATCH_TYPE_SLOTS[matchType]}`);
     }
 
     const derivedStatus = computeStatus({
@@ -449,7 +449,7 @@ const updateTournament = asyncHandler(async (req, res) => {
         }
     });
 
-    // ── Guard: cannot change matchType when active participants exist ──────────
+    // â”€â”€ Guard: cannot change matchType when active participants exist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (
         req.body.matchType !== undefined &&
         req.body.matchType !== tournament.matchType
@@ -479,7 +479,7 @@ const updateTournament = asyncHandler(async (req, res) => {
 
     logger.info(`Admin ${req.user.email} updated tournament: ${tournament.title} [status=${tournament.status}]`);
 
-    // ── Tournament-Live Email Notification ────────────────────────────────────
+    // â”€â”€ Tournament-Live Email Notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Fire non-blocking: fetch all registered participants and email them.
     if (goingLive && tournament.participants?.length > 0) {
         const participantIds = tournament.participants.map(p => p.userId ?? p);
@@ -548,7 +548,7 @@ const setRoomCredentials = asyncHandler(async (req, res) => {
 
     const isUpdate = !!tournament.get('roomId', null, { getters: false });
 
-    // Update credentials — only these two fields are touched
+    // Update credentials â€” only these two fields are touched
     tournament.roomId = roomId.trim();
     tournament.roomPassword = roomPassword.trim();
     tournament.updatedBy = req.user.id;
@@ -563,7 +563,7 @@ const setRoomCredentials = asyncHandler(async (req, res) => {
         adminEmail: req.user.email,
         tournamentId: tournament._id,
         tournamentTitle: tournament.title,
-        roomId: roomId.trim(),   // room ID is not sensitive — OK to log
+        roomId: roomId.trim(),   // room ID is not sensitive â€” OK to log
         hasPassword: true,       // confirms password was set WITHOUT logging it
         action: isUpdate ? 'update_credentials' : 'set_credentials',
         requestId: req.id,
@@ -588,7 +588,7 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
         _id: req.params.id,
         isDeleted: false,
     })
-        .select('title game entryFee maxParticipants participants status matchType')
+        .select('title game entryFee maxParticipants participants status matchType perKillAmount rankDistribution')
         .populate({
             path: 'participants.userId',
             select: '_id name email',
@@ -615,16 +615,18 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
         rank: p.rank ?? null,
         winningAmount: p.winningAmount ?? 0,
         totalKills: p.totalKills ?? 0,
+        calculatedAmount: p.calculatedAmount ?? 0,
         winsDistributedAt: p.winsDistributedAt ?? null,
         teamLeaderName: p.teamLeaderName || null,
         leaderGameName: p.leaderGameName || null,
+        playerGameName: p.playerGameName || null,
         teamMember2: p.teamMember2 || null,
         teamMember3: p.teamMember3 || null,
         teamMember4: p.teamMember4 || null,
         assignedSlot: p.assignedSlot ?? null,
     }));
 
-    // Sort: active first, then banned, then cancelled — within each group by join time
+    // Sort: active first, then banned, then cancelled â€” within each group by join time
     const statusOrder = { confirmed: 0, registered: 1, banned: 2, cancelled: 3 };
     participants.sort((a, b) => {
         const statusDiff = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
@@ -649,6 +651,12 @@ const getTournamentParticipants = asyncHandler(async (req, res) => {
             entryFee: tournament.entryFee,
             maxParticipants: tournament.maxParticipants,
             matchType: tournament.matchType || null,
+            perKillAmount: tournament.perKillAmount ?? 0,
+            rankDistribution: tournament.rankDistribution
+                ? (tournament.rankDistribution instanceof Map
+                    ? Object.fromEntries(tournament.rankDistribution)
+                    : tournament.rankDistribution)
+                : null,
         },
         participants,
         total: participants.length,
@@ -708,6 +716,7 @@ const getRegistrationDetail = asyncHandler(async (req, res) => {
             assignedSlot: participant.assignedSlot || null,
             teamLeaderName: participant.teamLeaderName || null,
             leaderGameName: participant.leaderGameName || null,
+            playerGameName: participant.playerGameName || null,
             teamMember2: participant.teamMember2 || null,
             teamMember3: participant.teamMember3 || null,
             teamMember4: participant.teamMember4 || null,
@@ -742,7 +751,7 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
     const { reason, refund = false } = req.body;
     const { id: tournamentId, userId: targetUserId } = req.params;
 
-    // ── Validate inputs ──────────────────────────────────────────────────────
+    // â”€â”€ Validate inputs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
         throw new ApiError('Ban reason is required', 400);
     }
@@ -756,7 +765,7 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
     const now = new Date();
     const adminId = req.user._id;
 
-    // ── Fetch tournament + locate participant ─────────────────────────────────
+    // â”€â”€ Fetch tournament + locate participant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const tournament = await Tournament.findOne({
         _id: tournamentId,
         isDeleted: false,
@@ -785,7 +794,7 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
         );
     }
 
-    // ── Atomic ban update — conditional on participant still being active ─────
+    // â”€â”€ Atomic ban update â€” conditional on participant still being active â”€â”€â”€â”€â”€
     // Prevents race condition between multiple admin sessions.
     const updated = await Tournament.findOneAndUpdate(
         {
@@ -817,10 +826,10 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
 
     if (!updated) {
         // Another admin may have already banned this participant concurrently
-        throw new ApiError('Ban failed — participant may have already been banned or removed', 409);
+        throw new ApiError('Ban failed â€” participant may have already been banned or removed', 409);
     }
 
-    // ── Optional wallet refund ────────────────────────────────────────────────
+    // â”€â”€ Optional wallet refund â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     let refundProcessed = false;
     const entryFee = tournament.entryFee;
 
@@ -846,8 +855,8 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
 
             refundProcessed = true;
         } catch (refundErr) {
-            // Ban stands even if refund fails — log for manual resolution
-            logger.error('Refund failed after ban — manual action required', {
+            // Ban stands even if refund fails â€” log for manual resolution
+            logger.error('Refund failed after ban â€” manual action required', {
                 adminId: adminId.toString(),
                 targetUserId,
                 tournamentId,
@@ -857,7 +866,7 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
         }
     }
 
-    // ── Audit log — no passwords, no sensitive data ────────────────────────
+    // â”€â”€ Audit log â€” no passwords, no sensitive data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     logger.warn('Admin banned tournament participant', {
         adminId: adminId.toString(),
         adminEmail: req.user.email,
@@ -884,7 +893,7 @@ const banTournamentParticipant = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const distributeWinningsHandler = asyncHandler(async (req, res) => {
     const { id: tournamentId } = req.params;
-    // manualPrizes: { [userId]: amountRupees } — sent from admin UI when manually entering prizes
+    // manualPrizes: { [userId]: amountRupees } â€” sent from admin UI when manually entering prizes
     const { manualPrizes = null } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(tournamentId)) {
@@ -957,7 +966,7 @@ const approveWithdrawalHandler = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        message: `Withdrawal of ₹${request.amount} approved successfully.`,
+        message: `Withdrawal of â‚¹${request.amount} approved successfully.`,
         request: {
             _id: request._id,
             status: request.status,
@@ -992,7 +1001,7 @@ const rejectWithdrawalHandler = asyncHandler(async (req, res) => {
 
     res.status(200).json({
         success: true,
-        message: `Withdrawal request rejected. ₹${request.amount} restored to user's wallet.`,
+        message: `Withdrawal request rejected. â‚¹${request.amount} restored to user's wallet.`,
         request: {
             _id: request._id,
             status: request.status,
@@ -1017,30 +1026,116 @@ const getPendingSettlementsHandler = asyncHandler(async (req, res) => {
 // @access  Private/Admin
 const setParticipantRank = asyncHandler(async (req, res) => {
     const { id: tournamentId, userId } = req.params;
-    const { rank, totalKills } = req.body;
+    const { rank, totalKills, calculatedAmount } = req.body;
 
-    if (!rank || typeof rank !== 'number' || rank < 1 || !Number.isInteger(rank)) {
+    // -- Step 1: Fetch tournament with settlement config -----------------------
+    const tournament = await Tournament.findOne({
+        _id: tournamentId,
+        isDeleted: false,
+        winningsDistributed: false,
+    }).select('participants winningsDistributed isDeleted matchType perKillAmount rankDistribution').lean();
+
+    if (!tournament) {
+        const t = await Tournament.findById(tournamentId).select('winningsDistributed isDeleted').lean();
+        if (!t || t.isDeleted) throw new ApiError('Tournament not found', 404);
+        if (t.winningsDistributed) throw new ApiError('Cannot change settlement after winnings have been distributed', 409);
+        throw new ApiError('Tournament not found', 404);
+    }
+
+    const isBRSolo = tournament.matchType === 'Battle Royale - Solo';
+
+    // -- Step 2: Validate inputs -----------------------------------------------
+    // For BR Solo: rank is OPTIONAL (null allowed — player can earn only kill money)
+    // When provided, only 1, 2, 3 are valid for BR Solo
+    if (rank !== undefined && rank !== null) {
+        if (typeof rank !== 'number' || rank < 1 || !Number.isInteger(rank)) {
+            throw new ApiError('rank must be a positive integer', 400);
+        }
+        if (isBRSolo && rank > 3) {
+            throw new ApiError('For Battle Royale - Solo, only ranks 1, 2, 3 are valid', 400);
+        }
+    }
+
+    // For non-BR modes, rank is still required (backward compat)
+    if (!isBRSolo && (!rank || typeof rank !== 'number' || rank < 1)) {
         throw new ApiError('rank must be a positive integer', 400);
     }
 
-    // Build $set payload — always includes rank; totalKills is optional
-    const setFields = {
-        'participants.$.rank': rank,
-        'participants.$.status': 'confirmed', // ensure confirmed status
-    };
+    // Validate kills
+    let kills = 0;
     if (totalKills !== undefined && totalKills !== null) {
-        const kills = parseInt(totalKills);
+        kills = parseInt(totalKills);
         if (isNaN(kills) || kills < 0) {
             throw new ApiError('totalKills must be a non-negative integer', 400);
         }
-        setFields['participants.$.totalKills'] = kills;
+    }
+
+    // -- Step 3: Confirm participant exists -------------------------------------
+    const targetParticipant = tournament.participants.find(
+        p => p.userId.toString() === userId
+    );
+    if (!targetParticipant) {
+        throw new ApiError('Participant not found in this tournament', 404);
+    }
+
+    // -- Step 4: Enforce rank uniqueness (if rank provided) --------------------
+    if (rank !== undefined && rank !== null && targetParticipant.rank !== rank) {
+        const rankConflict = tournament.participants.find(
+            p =>
+                p.userId.toString() !== userId &&
+                (p.status === 'registered' || p.status === 'confirmed') &&
+                p.rank === rank
+        );
+        if (rankConflict) {
+            const conflictName = rankConflict.teamLeaderName || rankConflict.userId.toString();
+            throw new ApiError(
+                'Rank ' + rank + ' is already assigned to ' + JSON.stringify(conflictName) + '. ' +
+                'Each rank can only be held by one participant. ' +
+                'Remove their rank first or choose a different rank.',
+                409
+            );
+        }
+    }
+
+    // -- Step 5: Auto-calculate settlement amount (BR Solo) --------------------
+    let computedAmount = 0;
+    if (isBRSolo && tournament.perKillAmount > 0) {
+        // Kill amount
+        const killAmount = kills * tournament.perKillAmount;
+
+        // Rank amount from rankDistribution
+        let rankAmount = 0;
+        if (rank && tournament.rankDistribution) {
+            const rd = tournament.rankDistribution instanceof Map
+                ? Object.fromEntries(tournament.rankDistribution)
+                : tournament.rankDistribution;
+            rankAmount = rd[String(rank)] || 0;
+        }
+
+        computedAmount = killAmount + rankAmount;
+    }
+
+    // Admin can override the calculated amount
+    const finalAmount = (calculatedAmount !== undefined && calculatedAmount !== null)
+        ? Math.max(0, Math.floor(Number(calculatedAmount)))
+        : computedAmount;
+
+    // -- Step 6: Build $set payload and apply ----------------------------------
+    const setFields = {
+        'participants.$.status': 'confirmed',
+        'participants.$.totalKills': kills,
+        'participants.$.calculatedAmount': finalAmount,
+    };
+    // Set rank if provided, unset if explicitly null (BR Solo allows no rank)
+    if (rank !== undefined && rank !== null) {
+        setFields['participants.$.rank'] = rank;
     }
 
     const updated = await Tournament.findOneAndUpdate(
         {
             _id: tournamentId,
             isDeleted: false,
-            winningsDistributed: false,              // cannot re-rank after distribution
+            winningsDistributed: false,
             'participants.userId': mongoose.Types.ObjectId.createFromHexString(userId),
         },
         { $set: setFields },
@@ -1048,27 +1143,24 @@ const setParticipantRank = asyncHandler(async (req, res) => {
     );
 
     if (!updated) {
-        const t = await Tournament.findById(tournamentId).select('winningsDistributed isDeleted').lean();
-        if (!t || t.isDeleted) throw new ApiError('Tournament not found', 404);
-        if (t.winningsDistributed) throw new ApiError('Cannot change ranks after winnings have been distributed', 409);
-        throw new ApiError('Participant not found in this tournament', 404);
+        throw new ApiError('Cannot change settlement — winnings may have been distributed concurrently. Refresh and retry.', 409);
     }
 
     const participant = updated.participants.find(p => p.userId.toString() === userId);
 
-    logger.info(`Admin ${req.user.email} set rank ${rank} for user ${userId} in tournament ${tournamentId}`);
+    logger.info(`Admin ${req.user.email} set settlement for user ${userId} in tournament ${tournamentId}: rank=${rank ?? 'none'}, kills=${kills}, amount=${finalAmount}`);
     res.status(200).json({
         success: true,
-        message: `Rank ${rank} set for participant`,
+        message: rank ? `Rank ${rank} set with ₹${finalAmount} settlement` : `Settlement of ₹${finalAmount} saved (${kills} kills)`,
         participant: {
             userId: participant.userId,
-            rank: participant.rank,
+            rank: participant.rank ?? null,
             totalKills: participant.totalKills ?? 0,
+            calculatedAmount: participant.calculatedAmount ?? 0,
             status: participant.status,
         },
     });
 });
-
 
 // @desc    Get settlement alert summary for admin dashboard banner
 // @route   GET /api/admin/alerts/settlements
