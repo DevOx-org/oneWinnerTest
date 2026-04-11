@@ -24,9 +24,11 @@ exports.getPublicTournaments = asyncHandler(async (req, res) => {
     const now = new Date();
 
     // ── 1. Build filter ──────────────────────────────────────────────────────
+    const isAdmin = req.user && req.user.role === 'admin';
     const filter = {
         isDeleted: false,
-        isTestMode: { $ne: true }, // Never show test tournaments to public users
+        // Test tournaments: visible to admins, hidden from regular/unauthenticated users
+        ...(!isAdmin ? { isTestMode: { $ne: true } } : {}),
         status: { $in: ['upcoming', 'live'] },
     };
 
